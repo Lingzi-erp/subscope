@@ -460,36 +460,6 @@ export const interactiveConfig = (): Promise<void> => {
         return
       }
 
-      // ── Folder/rename input mode ──
-      if (inputMode) {
-        if (key === '\r') {
-          if (inputBuffer.trim()) {
-            const newName = inputBuffer.trim()
-            const newPath = current().path ? `${current().path}/${newName}` : newName
-
-            if (inputMode === 'rename') {
-              const row = rowList[current().cursor]
-              const oldPath = row?.key!
-              const rename = (p: string) =>
-                p === oldPath ? newPath : p.startsWith(oldPath + '/') ? newPath + p.slice(oldPath.length) : p
-              cfg.folders = cfg.folders.map(rename)
-              cfg.activeGroups = cfg.activeGroups.map(rename)
-              cfg.sources.forEach(s => { s.group = rename(s.group) })
-            } else {
-              if (!cfg.folders.includes(newPath)) cfg.folders.push(newPath)
-              if (!cfg.activeGroups.includes(newPath)) cfg.activeGroups.push(newPath)
-            }
-            dirty = true
-          }
-          exitInput()
-          return
-        }
-        if (key === '\x1b' || key === '\x03') { exitInput(); return }
-        if (key === '\x7f' || key === '\b') { inputBuffer = inputBuffer.slice(0, -1); draw(); return }
-        if (key.length === 1 && key.charCodeAt(0) >= 32) { inputBuffer += key; draw(); return }
-        return
-      }
-
       // ── Source edit mode (s) ──
       if (inputMode === 'sources') {
         if (key === '\x1b[A' || key === 'k') {
@@ -539,6 +509,36 @@ export const interactiveConfig = (): Promise<void> => {
           inputMode = 'sources'; inputBuffer = ''; editSourceId = ''; draw(); return
         }
         if (key === '\x1b' || key === '\x03') { inputMode = 'sources'; inputBuffer = ''; draw(); return }
+        if (key === '\x7f' || key === '\b') { inputBuffer = inputBuffer.slice(0, -1); draw(); return }
+        if (key.length === 1 && key.charCodeAt(0) >= 32) { inputBuffer += key; draw(); return }
+        return
+      }
+
+      // ── Folder/rename input mode ──
+      if (inputMode === 'new' || inputMode === 'rename') {
+        if (key === '\r') {
+          if (inputBuffer.trim()) {
+            const newName = inputBuffer.trim()
+            const newPath = current().path ? `${current().path}/${newName}` : newName
+
+            if (inputMode === 'rename') {
+              const row = rowList[current().cursor]
+              const oldPath = row?.key!
+              const rename = (p: string) =>
+                p === oldPath ? newPath : p.startsWith(oldPath + '/') ? newPath + p.slice(oldPath.length) : p
+              cfg.folders = cfg.folders.map(rename)
+              cfg.activeGroups = cfg.activeGroups.map(rename)
+              cfg.sources.forEach(s => { s.group = rename(s.group) })
+            } else {
+              if (!cfg.folders.includes(newPath)) cfg.folders.push(newPath)
+              if (!cfg.activeGroups.includes(newPath)) cfg.activeGroups.push(newPath)
+            }
+            dirty = true
+          }
+          exitInput()
+          return
+        }
+        if (key === '\x1b' || key === '\x03') { exitInput(); return }
         if (key === '\x7f' || key === '\b') { inputBuffer = inputBuffer.slice(0, -1); draw(); return }
         if (key.length === 1 && key.charCodeAt(0) >= 32) { inputBuffer += key; draw(); return }
         return
