@@ -34,27 +34,22 @@ interface Row {
 
 // Get children of a path: immediate subgroups + sources at this level
 const childrenAt = (cfg: Config, path: string) => {
-  const allGroups = [...new Set(cfg.sources.map(s => s.group))]
+  // Include both source groups AND activeGroups (for empty folders)
+  const allPaths = new Set([
+    ...cfg.sources.map(s => s.group),
+    ...cfg.activeGroups,
+  ])
   const prefix = path ? path + '/' : ''
 
-  // Find immediate child folders (next level only)
   const childFolders = new Set<string>()
-  for (const g of allGroups) {
+  for (const g of allPaths) {
     if (!g.startsWith(prefix)) continue
     const rest = g.slice(prefix.length)
-    const nextPart = rest.split('/')[0]!
-    if (rest.includes('/')) {
-      // This is a subfolder
-      childFolders.add(nextPart)
-    } else {
-      // This is a direct child group
-      childFolders.add(nextPart)
-    }
+    if (!rest) continue
+    childFolders.add(rest.split('/')[0]!)
   }
 
-  // Find sources directly in this path
   const sources = cfg.sources.filter(s => s.group === path)
-
   return { folders: [...childFolders].sort(), sources }
 }
 
