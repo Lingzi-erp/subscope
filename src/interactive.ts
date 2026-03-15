@@ -1,5 +1,5 @@
 import { load, save, type Config } from './config.ts'
-import { createHash } from 'crypto'
+import { sourceId } from './lib.ts'
 import type { Source, SourceType } from './types.ts'
 
 // ── ANSI ──
@@ -414,7 +414,7 @@ const mkSource = (entry: CatalogEntry, url: string, group: string): Source => {
   const host = parsed.hostname.replace('www.', '')
   const path = parsed.pathname.replace(/\/+$/, '')
   return {
-    id: createHash('sha256').update(url).digest('hex').slice(0, 8),
+    id: sourceId(url),
     url, type: entry.type, group, active: true,
     name: path && path !== '/' ? `${host}${path}` : host,
     addedAt: new Date().toISOString(),
