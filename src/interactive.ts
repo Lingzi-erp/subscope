@@ -140,33 +140,29 @@ const renderLine = (item: Item, selected: boolean, active: boolean): string => {
   return ''
 }
 
-const CLR = '\x1b[K' // clear to end of line
-
-const draw = (state: State, fullClear = false) => {
+const draw = (state: State) => {
   const items = state.screen === 'main'
     ? buildMainItems(state.config)
     : buildGroupItems(state.config, state.groupName!)
 
-  if (fullClear) {
-    process.stdout.write('\x1b[2J') // only on first draw or screen switch
-  }
-  process.stdout.write('\x1b[H') // cursor home — overwrite in place
-  process.stdout.write('\x1b[?25l') // hide cursor
+  // In alternate screen buffer, full clear is safe and flicker-free
+  const lines: string[] = []
 
   const title = state.screen === 'main' ? 'subscope config' : state.groupName!
-  process.stdout.write(`${CLR}\n  ${BOLD}${title}${RESET}${CLR}\n`)
+  lines.push('')
+  lines.push(`  ${BOLD}${title}${RESET}`)
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!
     const selected = i === state.cursor
     const active = isActive(state, item)
-    process.stdout.write(renderLine(item, selected, active) + `${CLR}\n`)
+    lines.push(renderLine(item, selected, active))
   }
 
-  // Clear remaining lines
-  const used = items.length + 4
+  // Pad to push status bar to bottom
+  const used = lines.length + 2
   const pad = Math.max(0, rows() - used)
-  for (let i = 0; i < pad; i++) process.stdout.write(`${CLR}\n`)
+  for (let i = 0; i < pad; i++) lines.push('')
 
   // Status bar
   const hints = state.screen === 'main'
@@ -174,7 +170,10 @@ const draw = (state: State, fullClear = false) => {
     : '\u2191\u2193 navigate  space toggle  \u2190 back  enter save  q quit'
   const dirty = state.dirty ? ` ${CYAN}*${RESET}` : ''
   const bar = ` ${dirty} ${DIM}${hints}${RESET}`
-  process.stdout.write(`${BG_GRAY}${WHITE}${bar}${''.padEnd(Math.max(0, cols() - hints.length - 4))}${RESET}${CLR}\n`)
+  lines.push(`${BG_GRAY}${WHITE}${bar}${''.padEnd(Math.max(0, cols() - hints.length - 4))}${RESET}`)
+
+  // Write everything in one shot — minimizes flicker
+  process.stdout.write('\x1b[H\x1b[?25l' + lines.join('\x1b[K\n') + '\x1b[K')
 
   return items
 }
@@ -190,7 +189,7 @@ export const interactiveConfig = (): Promise<void> => {
   // Enter alternate screen buffer — clean canvas, original terminal restored on exit
   process.stdout.write('\x1b[?1049h')
 
-  let items = draw(state, true)
+  let items = draw(state)
   state.cursor = firstSelectable(items)
   items = draw(state)
 
@@ -239,7 +238,7 @@ export const interactiveConfig = (): Promise<void> => {
         if (item?.kind === 'group') {
           state.screen = 'group'
           state.groupName = item.name
-          items = draw(state, true)
+          items = draw(state)
           state.cursor = firstSelectable(items)
           items = draw(state)
         }
@@ -248,7 +247,7 @@ export const interactiveConfig = (): Promise<void> => {
       else if (key === '\x1b[D' || key === 'h') {
         if (state.screen === 'group') {
           state.screen = 'main'
-          items = draw(state, true)
+          items = draw(state)
           state.cursor = firstSelectable(items)
           items = draw(state)
         }
