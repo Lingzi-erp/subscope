@@ -64,19 +64,6 @@ const timeAgo = (iso: string): string => {
   return `${days}d ago`
 }
 
-// ── Logo ──
-
-const LOGO = [
-  `${c(75)}  ┌─╴${c(80)}╭─╴${c(114)}┌─╮${c(208)}╭─╮${c(216)}╭─╮${c(141)}╭─╮${c(196)}╭─╮${c(75)}╭─╮`,
-  `${c(75)}  └─╮${c(80)}│  ${c(114)}│ │${c(208)}├─╯${c(216)}├─╮${c(141)}│  ${c(196)}│ │${c(75)}├─╯`,
-  `${c(75)}  ╶─┘${c(80)}╰─╴${c(114)}└─╯${c(208)}╵  ${c(216)}╰─╯${c(141)}╰─╯${c(196)}╵  ${c(75)}╰─╴`,
-  RESET,
-]
-
-const printLogo = () => {
-  for (const line of LOGO) console.log(line)
-}
-
 // ── Format single feed item ──
 
 const formatItem = (item: FeedItem, maxWidth: number): string[] => {
@@ -116,7 +103,6 @@ export const renderFeed = (items: FeedItem[], olderCount = 0, hasSources = true)
   }
 
   console.log()
-  printLogo()
   const maxWidth = cols() - PREFIX_LEN
   for (const item of items) {
     for (const line of formatItem(item, maxWidth)) console.log(line)
@@ -139,16 +125,13 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
   const maxWidth = cols() - PREFIX_LEN
   const rendered = items.map(item => formatItem(item, maxWidth))
 
-  // First page gets the logo
-  const logoLines = LOGO.map(l => l)
-
   const footerHeight = 2
   const availableRows = rows() - footerHeight
   const pages: string[][] = []
-  let current: string[] = [...logoLines]
+  let current: string[] = []
 
   for (const group of rendered) {
-    if (current.length + group.length > availableRows && current.length > logoLines.length) {
+    if (current.length + group.length > availableRows && current.length > 0) {
       pages.push(current)
       current = []
     }
@@ -158,7 +141,6 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
 
   if (pages.length <= 1) {
     console.log()
-    printLogo()
     for (const line of rendered.flat()) console.log(line)
     return Promise.resolve()
   }
