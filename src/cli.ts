@@ -5,6 +5,7 @@ import { createStore } from './store.ts'
 import { fetchAll, read } from './pipeline.ts'
 import { detectType } from './adapters/index.ts'
 import { renderFeed, renderInteractive, renderSources, renderGroups } from './render.ts'
+import { interactiveConfig } from './interactive.ts'
 import { createHash } from 'crypto'
 import type { Source } from './types.ts'
 
@@ -180,6 +181,10 @@ const commands: Record<string, () => Promise<void>> = {
     source.active = false
     save(config)
     console.log(`\n  Deactivated: ${source.name}\n`)
+  },
+
+  config: async () => {
+    await interactiveConfig()
   },
 
   mode: async () => {
