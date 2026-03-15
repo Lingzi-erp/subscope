@@ -294,32 +294,51 @@ export const renderInteractive = (allItems: FeedItem[], olderCount = 0, hasSourc
 
       const { join } = require('path') as typeof import('path')
       const { homedir } = require('os') as typeof import('os')
-      const { writeFileSync, mkdirSync, existsSync } = require('fs') as typeof import('fs')
+      const { writeFileSync, readFileSync, mkdirSync, existsSync } = require('fs') as typeof import('fs')
+      const { parse: yamlParse } = require('yaml') as typeof import('yaml')
+
+      // Load auth cookies
+      const authFile = join(homedir(), '.subscope', 'auth.yml')
+      let cookies = ''
+      try {
+        const auth = yamlParse(readFileSync(authFile, 'utf-8')) as any
+        const domain = new URL(pdfUrl).hostname.replace('www.', '')
+        // Match by domain: nature, ieee, acs, arxiv, science
+        cookies = auth?.[domain]?.cookies ?? auth?.academic?.cookies ?? ''
+      } catch {}
 
       const dir = join(homedir(), 'Downloads', 'subscope')
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 
-      // Clean filename from title
       const safeName = item.title.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80)
       const filePath = join(dir, `${safeName}.pdf`)
 
-      // Show downloading status
-      const maxWidth = cols() - PREFIX_LEN
-      const statusLine = `  ${DIM}Downloading: ${safeName}.pdf ...${RESET}`
-      process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K${statusLine}`)
+      process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Downloading...${RESET}`)
 
       try {
-        const res = await fetch(pdfUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+        const headers: Record<string, string> = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        if (cookies) headers['Cookie'] = cookies
+
+        const res = await fetch(pdfUrl, { headers, redirect: 'follow' })
         if (!res.ok) throw new Error(`${res.status}`)
+
+        const ct = res.headers.get('content-type') ?? ''
+        if (!ct.includes('pdf') && !ct.includes('octet-stream')) {
+          // Got HTML instead of PDF — auth failed, fallback to browser
+          openUrl(pdfUrl)
+          process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Auth needed. Opened in browser.${RESET}`)
+          setTimeout(draw, 1500)
+          return
+        }
+
         const buf = await res.arrayBuffer()
         writeFileSync(filePath, Buffer.from(buf))
-        process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Saved: ${filePath}${RESET}`)
-      } catch (e) {
-        // Fallback: open PDF URL in browser (university proxy will handle auth)
+        process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Saved: ~/Downloads/subscope/${safeName}.pdf${RESET}`)
+      } catch {
         openUrl(pdfUrl)
-        process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Opened in browser${RESET}`)
+        process.stdout.write(`\x1b[${rows() - 1};1H\x1b[K  ${DIM}Opened in browser.${RESET}`)
       }
-      setTimeout(draw, 1500)
+      setTimeout(draw, 2000)
     }
 
     const onKey = (key: string) => {

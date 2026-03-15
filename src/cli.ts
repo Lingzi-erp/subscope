@@ -260,10 +260,38 @@ Write-Output "ok"
 
   auth: async () => {
     const service = args[0]
-    if (service !== 'x') {
-      console.error('Usage: subscope auth x')
-      console.error('  Configures X/Twitter auth cookie for real-time scraping')
-      process.exit(1)
+    if (!service || !['x', 'academic'].includes(service)) {
+      console.log('\n  subscope auth x <token>        X/Twitter auth_token cookie')
+      console.log('  subscope auth academic <cookies>  Academic publisher cookies\n')
+      return
+    }
+
+    if (service === 'academic') {
+      const cookies = args.slice(1).join(' ')
+      if (!cookies) {
+        console.log('\n  To get your academic cookies:')
+        console.log('  1. Log in to nature.com via your university')
+        console.log('  2. F12 → Network → any request to nature.com → Request Headers')
+        console.log('  3. Copy the full Cookie header value')
+        console.log(`\n  Then run: subscope auth academic "<full cookie string>"\n`)
+        return
+      }
+
+      const { join } = await import('path')
+      const { homedir } = await import('os')
+      const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('fs')
+      const { parse: yamlParse, stringify: yamlStringify } = await import('yaml')
+
+      const dir = join(homedir(), '.subscope')
+      const authFile = join(dir, 'auth.yml')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+
+      let auth: any = {}
+      if (existsSync(authFile)) auth = yamlParse(readFileSync(authFile, 'utf-8')) ?? {}
+      auth.academic = { cookies }
+      writeFileSync(authFile, yamlStringify(auth))
+      console.log('\n  Academic cookies saved. Press g on papers to download PDFs.\n')
+      return
     }
 
     const token = args[1]
