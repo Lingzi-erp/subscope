@@ -187,6 +187,43 @@ const commands: Record<string, () => Promise<void>> = {
     await interactiveConfig()
   },
 
+  auth: async () => {
+    const service = args[0]
+    if (service !== 'x') {
+      console.error('Usage: subscope auth x')
+      console.error('  Configures X/Twitter auth cookie for real-time scraping')
+      process.exit(1)
+    }
+
+    const token = args[1]
+    if (!token) {
+      console.log('\n  To get your auth_token:')
+      console.log('  1. Open x.com in your browser (logged in)')
+      console.log('  2. DevTools (F12) → Application → Cookies → x.com')
+      console.log('  3. Copy the value of "auth_token"')
+      console.log(`\n  Then run: subscope auth x <token>\n`)
+      return
+    }
+
+    const { join } = await import('path')
+    const { homedir } = await import('os')
+    const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('fs')
+    const { parse: yamlParse, stringify: yamlStringify } = await import('yaml')
+
+    const dir = join(homedir(), '.subscope')
+    const authFile = join(dir, 'auth.yml')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+
+    let auth: any = {}
+    if (existsSync(authFile)) {
+      auth = yamlParse(readFileSync(authFile, 'utf-8')) ?? {}
+    }
+    auth.x = { auth_token: token }
+    writeFileSync(authFile, yamlStringify(auth))
+
+    console.log('\n  X auth token saved. Stale accounts will now use Playwright.\n')
+  },
+
   mode: async () => {
     const config = load()
     const target = args[0]
