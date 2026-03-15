@@ -48,7 +48,10 @@ const formatSourceName = (name: string): string => {
     const slug = name.split('/').pop()?.replace(/^\d+-/, '') ?? 'support'
     return `Claude Support \u00b7 ${slug}`
   }
-  const parts = name.replace(/\.(com|org|net|io|ai|dev)/, '').split('/')
+  const parts = name
+    .replace(/\.(com|org|net|io|ai|dev)/, '')
+    .split('/')
+    .filter(p => !p.match(/\.(xml|json|atom|rss)$/))  // strip feed file extensions
   parts[0] = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1)
   return parts.join(' \u00b7 ')
 }
