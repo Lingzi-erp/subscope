@@ -68,12 +68,13 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
   }
 
   let html: string
-  const res = await fetch(url, { headers, tls: { rejectUnauthorized: false } } as any)
-  if (!res.ok) {
-    // Fallback: use Playwright for sites that block non-browser requests (e.g. BLS)
-    html = await fetchWithBrowser(url)
-  } else {
+  try {
+    const res = await fetch(url, { headers, tls: { rejectUnauthorized: false } } as any)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     html = await res.text()
+  } catch {
+    // Fallback: use Playwright for sites that block non-browser requests or have cert issues
+    html = await fetchWithBrowser(url)
   }
   const $ = cheerio.load(html)
 
@@ -118,25 +119,51 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     $(el).text().replace(/\s+/g, ' ').trim()
 
   const renderTable = (node: any) => {
-    const rows: string[][] = []
-    $(node).find('tr').each((_, tr) => {
-      const cells: string[] = []
-      $(tr).find('th, td').each((_, cell) => {
-        cells.push(cellText(cell))
-      })
-      if (cells.some(c => c)) rows.push(cells)
-    })
-    if (!rows.length) return
+    // Build a proper grid handling colspan + rowspan
+    const trs = $(node).find('tr').toArray()
+    const grid: string[][] = []
+    const occupied: Set<string> = new Set() // "row,col" keys for rowspan-occupied cells
 
-    // Compute column widths
+    for (let r = 0; r < trs.length; r++) {
+      if (!grid[r]) grid[r] = []
+      let col = 0
+      $(trs[r]!).find('th, td').each((_, cell) => {
+        // Skip cells occupied by rowspan from above
+        while (occupied.has(`${r},${col}`)) col++
+        const text = cellText(cell)
+        const colspan = parseInt($(cell).attr('colspan') || '1', 10)
+        const rowspan = parseInt($(cell).attr('rowspan') || '1', 10)
+        // Fill grid for this cell's span
+        for (let dr = 0; dr < rowspan; dr++) {
+          for (let dc = 0; dc < colspan; dc++) {
+            const gr = r + dr, gc = col + dc
+            if (!grid[gr]) grid[gr] = []
+            grid[gr]![gc] = (dr === 0 && dc === 0) ? text : ''
+            if (dr > 0 || dc > 0) occupied.add(`${gr},${gc}`)
+          }
+        }
+        col += colspan
+      })
+    }
+
+    // Filter empty rows, normalize column count
+    const rows = grid.filter(r => r && r.some(c => c?.trim()))
+    if (!rows.length) return
     const colCount = Math.max(...rows.map(r => r.length))
+    for (const row of rows) { while (row.length < colCount) row.push(''); row.splice(colCount) }
+
+    // Find where data starts (first row where most cells are numeric)
+    const isNumRow = (r: string[]) => r.filter(c => /^-?[\d,.]+%?$/.test((c ?? '').replace(/[()p]/g, ''))).length > r.length / 3
+    let dataStart = rows.findIndex(r => isNumRow(r))
+    if (dataStart < 0) dataStart = rows.length > 2 ? 2 : 1
+
+    const finalRows = rows
     const widths: number[] = Array(colCount).fill(0)
-    for (const row of rows) {
+    for (const row of finalRows) {
       for (let i = 0; i < row.length; i++) {
         widths[i] = Math.max(widths[i]!, row[i]!.length)
       }
     }
-    // Cap column width to keep tables readable
     const maxCol = 30
     for (let i = 0; i < widths.length; i++) widths[i] = Math.min(widths[i]!, maxCol)
 
@@ -149,14 +176,14 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
       '| ' + row.map((c, i) => pad(c, widths[i]!)).join(' | ') + ' |'
 
     blocks.push('\n')
-    // First row as header
-    blocks.push(fmtRow(rows[0]!))
-    blocks.push('\n')
-    blocks.push('|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|')
-    blocks.push('\n')
-    for (let i = 1; i < rows.length; i++) {
-      blocks.push(fmtRow(rows[i]!))
+    for (let i = 0; i < finalRows.length; i++) {
+      blocks.push(fmtRow(finalRows[i]!))
       blocks.push('\n')
+      // Separator after last header row
+      if (i === dataStart - 1) {
+        blocks.push('|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|')
+        blocks.push('\n')
+      }
     }
     blocks.push('\n')
   }
@@ -217,8 +244,12 @@ const fetchWithBrowser = (url: string): Promise<string> => {
     `await b.close();`,
     `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
   ].join('')
+  const { join } = require('path') as typeof import('path')
+  const projectRoot = join(import.meta.dir, '..')
   const r = Bun.spawnSync(['node', '-e', script], {
     stdout: 'pipe', stderr: 'pipe', timeout: 30_000,
+    cwd: projectRoot,
+    env: { ...process.env, NODE_PATH: join(projectRoot, 'node_modules') },
   })
   if (r.exitCode !== 0) {
     const err = new TextDecoder().decode(r.stderr).trim()
