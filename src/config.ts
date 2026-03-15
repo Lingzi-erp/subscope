@@ -4,9 +4,22 @@ import { homedir } from 'os'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
 import type { Source } from './types.ts'
 
+export type ModeName = 'formal' | 'quick' | string
+
+export interface ModeConfig {
+  types: string[]  // source types to include
+}
+
 export interface Config {
   activeGroups: string[]
+  defaultMode: ModeName
+  modes: Record<string, ModeConfig>
   sources: Source[]
+}
+
+const DEFAULT_MODES: Record<string, ModeConfig> = {
+  formal: { types: ['website'] },
+  quick: { types: ['youtube', 'twitter'] },
 }
 
 const SUBSCOPE_DIR = join(homedir(), '.subscope')
@@ -18,9 +31,9 @@ const ensureDir = () => {
 
 export const load = (): Config => {
   ensureDir()
-  if (!existsSync(CONFIG_FILE)) return { activeGroups: [], sources: [] }
+  if (!existsSync(CONFIG_FILE)) return { activeGroups: [], defaultMode: 'formal', modes: DEFAULT_MODES, sources: [] }
   const raw = parse(readFileSync(CONFIG_FILE, 'utf-8')) as any
-  // Migrate: old configs without group/active/activeGroups
+  // Migrate: old configs without group/active/activeGroups/modes
   const sources: Source[] = (raw?.sources ?? []).map((s: any) => ({
     ...s,
     group: s.group ?? inferGroup(s.url),
@@ -28,7 +41,9 @@ export const load = (): Config => {
   }))
   const groups = [...new Set(sources.map(s => s.group))]
   const activeGroups: string[] = raw?.activeGroups ?? groups
-  return { activeGroups, sources }
+  const defaultMode: ModeName = raw?.defaultMode ?? 'formal'
+  const modes: Record<string, ModeConfig> = raw?.modes ?? DEFAULT_MODES
+  return { activeGroups, defaultMode, modes, sources }
 }
 
 export const save = (config: Config): void => {
@@ -65,10 +80,15 @@ export const inferGroup = (url: string): string => {
 }
 
 // Get sources that should be fetched/displayed
-export const activeSources = (config: Config, group?: string): Source[] => {
+export const activeSources = (config: Config, opts?: { group?: string; mode?: string }): Source[] => {
+  const mode = opts?.mode
+  const modeConfig = mode ? config.modes[mode] : undefined
+
   return config.sources.filter(s => {
     if (!s.active) return false
-    if (group) return s.group === group
-    return config.activeGroups.includes(s.group)
+    if (opts?.group) return s.group === opts.group
+    if (!config.activeGroups.includes(s.group)) return false
+    if (modeConfig) return modeConfig.types.includes(s.type)
+    return true
   })
 }

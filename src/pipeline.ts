@@ -9,6 +9,7 @@ export interface ReadOpts {
   since?: string
   all?: boolean
   group?: string
+  mode?: string
 }
 
 export const fetchAll = async (): Promise<number> => {
@@ -37,7 +38,8 @@ const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000
 
 export const read = (opts: ReadOpts = {}): { items: FeedItem[]; olderCount: number } => {
   const config = load()
-  const sources = activeSources(config, opts.group)
+  const mode = opts.mode ?? config.defaultMode
+  const sources = activeSources(config, { group: opts.group, mode })
   const sourceIds = sources.map(s => s.id)
 
   if (sourceIds.length === 0) {

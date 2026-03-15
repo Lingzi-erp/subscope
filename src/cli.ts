@@ -181,6 +181,36 @@ const commands: Record<string, () => Promise<void>> = {
     save(config)
     console.log(`\n  Deactivated: ${source.name}\n`)
   },
+
+  mode: async () => {
+    const config = load()
+    const target = args[0]
+
+    if (!target) {
+      // subscope mode — show all modes
+      console.log()
+      for (const [name, m] of Object.entries(config.modes)) {
+        const isDefault = name === config.defaultMode
+        const icon = isDefault ? `\x1b[36m\u25cf\x1b[0m` : `\x1b[90m\u25cb\x1b[0m`
+        const label = isDefault ? `\x1b[1m${name}\x1b[0m` : `\x1b[90m${name}\x1b[0m`
+        const def = isDefault ? ` \x1b[2m(default)\x1b[0m` : ''
+        console.log(`  ${icon} ${label}  \x1b[2m${m.types.join(', ')}${def}\x1b[0m`)
+      }
+      console.log(`\n  \x1b[2msubscope mode <name>  set default\x1b[0m`)
+      console.log()
+      return
+    }
+
+    if (!config.modes[target]) {
+      console.error(`Unknown mode: ${target}`)
+      console.error(`Available: ${Object.keys(config.modes).join(', ')}`)
+      process.exit(1)
+    }
+
+    config.defaultMode = target
+    save(config)
+    console.log(`\n  Default mode set to: ${target}\n`)
+  },
 }
 
 // --- route ---
@@ -196,8 +226,14 @@ const parseReadFlags = (argv: string[]) => {
   return opts
 }
 
-if (!command || command.startsWith('-')) {
-  const opts = parseReadFlags(process.argv.slice(2))
+// Check if command is a mode name (e.g. "subscope quick", "subscope formal")
+const config = load()
+const isMode = command && command in config.modes && !commands[command]
+
+if (!command || command.startsWith('-') || isMode) {
+  const readArgs = isMode ? args : process.argv.slice(2)
+  const opts = parseReadFlags(readArgs)
+  if (isMode) opts.mode = command
   const { items, olderCount } = read(opts)
 
   const isTTY = process.stdout.isTTY
@@ -212,6 +248,6 @@ if (!command || command.startsWith('-')) {
   await commands[command]!()
 } else {
   console.error(`Unknown command: ${command}`)
-  console.error('Commands: add, ls, rm, fetch, group, on, off')
+  console.error('Commands: add, ls, rm, fetch, group, on, off, mode')
   process.exit(1)
 }
