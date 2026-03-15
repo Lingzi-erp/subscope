@@ -8,6 +8,7 @@ interface SiteRule {
   title?: string
   cleanTitle?: (t: string) => string
   pick?: ($: cheerio.CheerioAPI) => cheerio.Cheerio<any>
+  feedUrl?: string  // RSS feed URL — used as fallback when page fetch fails (Cloudflare etc.)
 }
 
 const SITES: SiteRule[] = [
@@ -150,18 +151,21 @@ const SITES: SiteRule[] = [
     selector: 'article',
     title: 'h1',
     cleanTitle: (t: string) => t.replace(/\s*\|\s*OpenAI$/, '').trim(),
+    feedUrl: 'https://openai.com/news/rss.xml',
   },
   {
     test: u => u.includes('deepmind.google'),
     selector: 'main',
     title: 'h1',
     cleanTitle: (t: string) => t.replace(/\s*[—–-]\s*Google DeepMind$/, '').trim(),
+    feedUrl: 'https://deepmind.google/blog/rss.xml',
   },
   // ── Other ──
   {
     test: u => u.includes('github.com') && /\/releases\/tag\//.test(u),
     selector: '.markdown-body',
-    title: 'h1',
+    title: 'title',
+    cleanTitle: (t: string) => t.replace(/\s*·\s*GitHub$/, '').trim(),
     pick: ($: cheerio.CheerioAPI) => {
       return $('[data-test-selector="body-content"]').first()
     },
@@ -171,11 +175,6 @@ const SITES: SiteRule[] = [
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 export const readArticle = async (url: string): Promise<{ title: string; text: string }> => {
-  // X/Twitter: use oembed API for tweets (no auth needed)
-  if ((url.includes('x.com/') || url.includes('twitter.com/')) && url.includes('/status/')) {
-    return readTweet(url)
-  }
-
   // SEC EDGAR: filing index pages → auto-follow to the actual document
   if (url.includes('sec.gov') && url.includes('-index.htm')) {
     const resolved = await resolveEdgarDoc(url)
@@ -200,6 +199,12 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     html = await res.text()
   } catch {
+    // Page fetch failed (Cloudflare etc.) — fast path: try RSS feed
+    if (site?.feedUrl) {
+      const rss = await readFromFeed(url, site.feedUrl).catch(() => null)
+      if (rss) return rss
+    }
+    // Slow fallback: Playwright
     html = await fetchWithBrowser(url)
   }
   const $ = cheerio.load(html)
@@ -229,7 +234,16 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
   if (!$body || !$body.length) $body = $('body')
 
   // Clean: remove nav, scripts, styles, images, footers, noscript
-  $body.find('script, style, noscript, nav, footer, .nav, .footer, .sidebar, .breadcrumb, img, svg, iframe, .ad, .share, .social').remove()
+  $body.find('script, style, noscript, nav, footer, .nav, .footer, .sidebar, .breadcrumb, img, svg, iframe, video, .ad, .share, .social, [class*="share"], button').remove()
+
+  // Remove headings that duplicate the title
+  if (title) {
+    const titleNorm = title.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '')
+    $body.find('h1, h2, h3').each((_, el) => {
+      const hNorm = $(el).text().trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '')
+      if (hNorm === titleNorm) $(el).remove()
+    })
+  }
 
   // Convert block elements to newlines, preserve structure
   const text = extractText($body, $)
@@ -382,15 +396,25 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     .trim()
 }
 
-// X/Twitter: fetch tweet text via oembed API
-const readTweet = async (url: string): Promise<{ title: string; text: string }> => {
-  const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`
-  const res = await fetch(oembedUrl)
-  if (!res.ok) throw new Error(`Tweet not found (${res.status})`)
-  const data = await res.json() as { author_name: string; html: string }
-  const $ = cheerio.load(data.html)
-  const text = $('blockquote p').map((_, el) => $(el).text()).get().join('\n\n')
-  return { title: data.author_name || 'Tweet', text }
+// RSS feed fallback: find article in feed by URL, return title + description
+const readFromFeed = async (articleUrl: string, feedUrl: string): Promise<{ title: string; text: string }> => {
+  const res = await fetch(feedUrl, { tls: { rejectUnauthorized: false } } as any)
+  if (!res.ok) throw new Error(`RSS fetch failed: ${res.status}`)
+  const xml = await res.text()
+  const $ = cheerio.load(xml, { xml: true })
+
+  let title = '', text = ''
+  $('item, entry').each((_, el) => {
+    const link = $(el).find('link').attr('href') ?? $(el).find('link').text().trim()
+    if (!link || !articleUrl.includes(new URL(link).pathname)) return
+    title = $(el).find('title').text().trim()
+    const desc = $(el).find('description, summary, content').first().text().trim()
+    text = desc.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+    return false // break
+  })
+
+  if (!title) throw new Error('Article not found in feed')
+  return { title, text }
 }
 
 // SEC EDGAR: resolve filing index page → main document URL + title
