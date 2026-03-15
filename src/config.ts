@@ -12,6 +12,7 @@ export interface ModeConfig {
 
 export interface Config {
   activeGroups: string[]
+  folders: string[]      // all created folder paths (persists even when empty/inactive)
   defaultMode: ModeName
   modes: Record<string, ModeConfig>
   sources: Source[]
@@ -31,7 +32,7 @@ const ensureDir = () => {
 
 export const load = (): Config => {
   ensureDir()
-  if (!existsSync(CONFIG_FILE)) return { activeGroups: [], defaultMode: 'formal', modes: DEFAULT_MODES, sources: [] }
+  if (!existsSync(CONFIG_FILE)) return { activeGroups: [], folders: [], defaultMode: 'formal', modes: DEFAULT_MODES, sources: [] }
   const raw = parse(readFileSync(CONFIG_FILE, 'utf-8')) as any
   // Migrate: old configs + flat groups → nested groups
   const migrateGroup = (g: string) => {
@@ -49,9 +50,23 @@ export const load = (): Config => {
   }))
   const rawGroups: string[] = raw?.activeGroups ?? [...new Set(sources.map(s => s.group))]
   const activeGroups = rawGroups.map(migrateGroup)
+  // Folders: all unique group paths (from sources + activeGroups + explicit folders)
+  const allPaths = new Set([
+    ...sources.map(s => s.group),
+    ...activeGroups,
+    ...((raw?.folders ?? []) as string[]).map(migrateGroup),
+  ])
+  // Also add parent paths (e.g. "ai" from "ai/anthropic")
+  for (const p of [...allPaths]) {
+    const parts = p.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      allPaths.add(parts.slice(0, i).join('/'))
+    }
+  }
+  const folders = [...allPaths].sort()
   const defaultMode: ModeName = raw?.defaultMode ?? 'formal'
   const modes: Record<string, ModeConfig> = raw?.modes ?? DEFAULT_MODES
-  return { activeGroups, defaultMode, modes, sources }
+  return { activeGroups, folders, defaultMode, modes, sources }
 }
 
 export const save = (config: Config): void => {

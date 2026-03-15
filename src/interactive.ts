@@ -34,19 +34,14 @@ interface Row {
 
 // Get children of a path: immediate subgroups + sources at this level
 const childrenAt = (cfg: Config, path: string) => {
-  // Include both source groups AND activeGroups (for empty folders)
-  const allPaths = new Set([
-    ...cfg.sources.map(s => s.group),
-    ...cfg.activeGroups,
-  ])
   const prefix = path ? path + '/' : ''
 
   const childFolders = new Set<string>()
-  for (const g of allPaths) {
-    if (!g.startsWith(prefix)) continue
-    const rest = g.slice(prefix.length)
-    if (!rest) continue
-    childFolders.add(rest.split('/')[0]!)
+  for (const f of cfg.folders) {
+    if (!f.startsWith(prefix)) continue
+    const rest = f.slice(prefix.length)
+    if (!rest || rest.includes('/')) continue // only immediate children
+    childFolders.add(rest)
   }
 
   const sources = cfg.sources.filter(s => s.group === path)
@@ -148,8 +143,8 @@ const render = (path: string, rowList: Row[], cursor: number, dirty: boolean, in
 
   // Status bar
   const nav = path
-    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  n new folder  enter save'
-    : '\u2191\u2193 move  space toggle  \u2192 open  n new folder  enter save  q quit'
+    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  n new  d delete  enter save'
+    : '\u2191\u2193 move  space toggle  \u2192 open  n new  d delete  enter save  q quit'
   const mark = dirty ? `${CYAN}*${RESET} ` : '  '
   const pad = Math.max(0, w - nav.length - 4)
   out.push(`${BG_BAR}${WHITE} ${mark}${DIM}${nav}${' '.repeat(pad)}${RESET}`)
@@ -244,14 +239,12 @@ export const interactiveConfig = (): Promise<void> => {
       // Input mode: typing folder name
       if (inputMode) {
         if (key === '\r') {
-          // Create the folder (just set it as active — sources can be moved into it later)
           if (inputBuffer.trim()) {
             const newPath = current().path
               ? `${current().path}/${inputBuffer.trim()}`
               : inputBuffer.trim()
-            if (!cfg.activeGroups.includes(newPath)) {
-              cfg.activeGroups.push(newPath)
-            }
+            if (!cfg.folders.includes(newPath)) cfg.folders.push(newPath)
+            if (!cfg.activeGroups.includes(newPath)) cfg.activeGroups.push(newPath)
             dirty = true
           }
           inputMode = ''
@@ -302,6 +295,26 @@ export const interactiveConfig = (): Promise<void> => {
         inputMode = 'new'
         inputBuffer = ''
         draw()
+      } else if (key === 'd') {
+        const row = rowList[current().cursor]
+        if (row?.kind === 'folder') {
+          const path = row.key!
+          const hasSourcesInside = cfg.sources.some(s => s.group === path || s.group.startsWith(path + '/'))
+          if (hasSourcesInside) {
+            // Can't delete — has sources. Could show a message but for now just ignore.
+          } else {
+            cfg.folders = cfg.folders.filter(f => f !== path && !f.startsWith(path + '/'))
+            cfg.activeGroups = cfg.activeGroups.filter(g => g !== path && !g.startsWith(path + '/'))
+            dirty = true
+            // Adjust cursor if needed
+            rowList = buildRows(cfg, current().path)
+            if (current().cursor >= rowList.length) {
+              current().cursor = Math.max(0, rowList.length - 1)
+            }
+            current().cursor = findNext(rowList, current().cursor, -1)
+            draw()
+          }
+        }
       } else if (key === '\r' || key === 'q' || key === '\x03') {
         quit()
       }
