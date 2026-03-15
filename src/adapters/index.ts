@@ -1,3 +1,4 @@
+import { twitter } from './twitter.ts'
 import { youtube } from './youtube.ts'
 import { website } from './website.ts'
 import { fetchAnthropic } from './sites/anthropic.ts'
@@ -25,6 +26,7 @@ const matchSite = (url: string): SourceAdapter['fetch'] | undefined => {
 
 // Generic adapters — ordered by specificity, website is the fallback
 const adapters: SourceAdapter[] = [
+  twitter,
   youtube,
   website,
 ]
