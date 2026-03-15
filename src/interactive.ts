@@ -145,8 +145,8 @@ const render = (path: string, rowList: Row[], cursor: number, dirty: boolean, in
 
   // Status bar
   const nav = path
-    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  a add  n new  e rename  d del  q save'
-    : '\u2191\u2193 move  space toggle  \u2192 open  a add  n new  e rename  d del  q save'
+    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  s sources  n new  e rename  d del  q save'
+    : '\u2191\u2193 move  space toggle  \u2192 open  s sources  n new  e rename  d del  q save'
   const mark = dirty ? `${CYAN}*${RESET} ` : '  '
   const pad = Math.max(0, w - nav.length - 4)
   out.push(`${BG_BAR}${WHITE} ${mark}${DIM}${nav}${' '.repeat(pad)}${RESET}`)
@@ -261,9 +261,17 @@ export const interactiveConfig = (): Promise<void> => {
   let dirty = false
   let inputMode = '' // '', 'new', 'rename', 'add-search', 'add-handle'
   let inputBuffer = ''
-  let addCatalog: CatalogEntry[] = []  // filtered catalog
-  let addCursor = 0                    // selected catalog item
-  let addSelected: CatalogEntry | null = null // selected entry needing handle input
+  let addCatalog: CatalogEntry[] = []
+  let addCursor = 0
+  let addSelected: CatalogEntry | null = null
+  let srcList: Source[] = []           // sources in current folder
+  let srcCursor = 0
+  let editSourceId = ''
+
+  const getSrcList = () => {
+    const path = current().path
+    return cfg.sources.filter(s => s.group === path || s.group.startsWith(path + '/'))
+  }
 
   const current = () => stack[stack.length - 1]!
 
@@ -273,15 +281,51 @@ export const interactiveConfig = (): Promise<void> => {
   process.stdout.write(ALT_ON)
 
   const draw = () => {
-    if (inputMode === 'add-search' || inputMode === 'add-handle') {
-      drawAddMode()
-      return
-    }
+    if (inputMode === 'add-search' || inputMode === 'add-handle') { drawAddMode(); return }
+    if (inputMode === 'sources' || inputMode === 'edit-source') { drawSourceMode(); return }
     rowList = buildRows(cfg, current().path)
     const prompt = inputMode === 'rename' ? `Rename: ${inputBuffer}\u2588`
       : inputMode === 'new' ? `New folder: ${inputBuffer}\u2588`
       : ''
     render(current().path, rowList, current().cursor, dirty, prompt)
+  }
+
+  const drawSourceMode = () => {
+    const w = cols()
+    const h = rows()
+    const out: string[] = []
+
+    const path = current().path || '(root)'
+    out.push(`  ${BOLD}Sources in ${path}${RESET}`)
+    out.push('')
+
+    if (inputMode === 'edit-source') {
+      out.push(`  ${DIM}Name:${RESET} ${YELLOW}${inputBuffer}\u2588${RESET}`)
+      out.push('')
+    }
+
+    srcList = getSrcList()
+    if (srcList.length === 0) {
+      out.push(`  ${DIM}No sources. Press 'a' to add.${RESET}`)
+    }
+    for (let i = 0; i < srcList.length; i++) {
+      const s = srcList[i]!
+      const sel = i === srcCursor && inputMode !== 'edit-source'
+      const ptr = sel ? `${CYAN}\u203a${RESET}` : ' '
+      const icon = s.active ? `${CYAN}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
+      const label = sel ? `${BOLD}${s.name}${RESET}` : s.name
+      out.push(` ${ptr} ${icon} ${label}  ${DIM}${s.type}${RESET}`)
+      out.push(`       ${DIM}${s.url}${RESET}`)
+    }
+
+    while (out.length < h - 2) out.push('')
+    const nav = inputMode === 'edit-source'
+      ? 'enter confirm  esc cancel'
+      : '\u2191\u2193 move  space toggle  a add  e edit  d delete  esc back'
+    const mark = dirty ? `${CYAN}*${RESET} ` : '  '
+    const pad = Math.max(0, w - nav.length - 4)
+    out.push(`${BG_BAR}${WHITE} ${mark}${DIM}${nav}${' '.repeat(pad)}${RESET}`)
+    process.stdout.write(HOME + HIDE_CURSOR + out.map(l => l + CLR_LINE).join('\n') + CLR_BELOW)
   }
 
   const drawAddMode = () => {
@@ -347,11 +391,16 @@ export const interactiveConfig = (): Promise<void> => {
       resolve()
     }
 
+    let returnToSources = false
+
     const exitInput = () => {
-      inputMode = ''
+      const backToSources = returnToSources
+      inputMode = backToSources ? 'sources' : ''
       inputBuffer = ''
       addSelected = null
       addCursor = 0
+      returnToSources = false
+      if (backToSources) srcList = getSrcList()
       draw()
     }
 
@@ -441,20 +490,68 @@ export const interactiveConfig = (): Promise<void> => {
         return
       }
 
-      // Normal mode
+      // ── Source edit mode (s) ──
+      if (inputMode === 'sources') {
+        if (key === '\x1b[A' || key === 'k') {
+          srcCursor = Math.max(0, srcCursor - 1); draw(); return
+        }
+        if (key === '\x1b[B' || key === 'j') {
+          srcCursor = Math.min(srcList.length - 1, srcCursor + 1); draw(); return
+        }
+        if (key === ' ') {
+          const src = srcList[srcCursor]
+          if (src) { src.active = !src.active; dirty = true; draw() }
+          return
+        }
+        if (key === 'a') {
+          returnToSources = true
+          inputMode = 'add-search'; inputBuffer = ''; addCursor = 0; draw(); return
+        }
+        if (key === 'e') {
+          const src = srcList[srcCursor]
+          if (src) { inputMode = 'edit-source'; inputBuffer = src.name; editSourceId = src.id; draw() }
+          return
+        }
+        if (key === 'd') {
+          const src = srcList[srcCursor]
+          if (src) {
+            cfg.sources = cfg.sources.filter(s => s.id !== src.id)
+            dirty = true
+            srcList = getSrcList()
+            srcCursor = Math.min(srcCursor, Math.max(0, srcList.length - 1))
+            draw()
+          }
+          return
+        }
+        if (key === '\x1b' || key === '\r' || key === 'q' || key === '\x03') {
+          inputMode = ''; draw(); return
+        }
+        return
+      }
+
+      // ── Edit source name ──
+      if (inputMode === 'edit-source') {
+        if (key === '\r') {
+          if (inputBuffer.trim() && editSourceId) {
+            const src = cfg.sources.find(s => s.id === editSourceId)
+            if (src) { src.name = inputBuffer.trim(); dirty = true }
+          }
+          inputMode = 'sources'; inputBuffer = ''; editSourceId = ''; draw(); return
+        }
+        if (key === '\x1b' || key === '\x03') { inputMode = 'sources'; inputBuffer = ''; draw(); return }
+        if (key === '\x7f' || key === '\b') { inputBuffer = inputBuffer.slice(0, -1); draw(); return }
+        if (key.length === 1 && key.charCodeAt(0) >= 32) { inputBuffer += key; draw(); return }
+        return
+      }
+
+      // ── Normal folder mode ──
       if (key === '\x1b[A' || key === 'k') {
-        current().cursor = findNext(rowList, current().cursor, -1)
-        draw()
+        current().cursor = findNext(rowList, current().cursor, -1); draw()
       } else if (key === '\x1b[B' || key === 'j') {
-        current().cursor = findNext(rowList, current().cursor, 1)
-        draw()
+        current().cursor = findNext(rowList, current().cursor, 1); draw()
       } else if (key === ' ') {
         const row = rowList[current().cursor]
-        if (row && selectable(row)) {
-          toggle(cfg, row)
-          dirty = true
-          draw()
-        }
+        if (row && selectable(row)) { toggle(cfg, row); dirty = true; draw() }
       } else if (key === '\x1b[C' || key === 'l') {
         const row = rowList[current().cursor]
         if (row?.kind === 'folder') {
@@ -464,43 +561,27 @@ export const interactiveConfig = (): Promise<void> => {
           draw()
         }
       } else if (key === '\x1b[D' || key === 'h') {
-        if (stack.length > 1) {
-          stack.pop()
-          draw()
-        }
-      } else if (key === 'a') {
-        inputMode = 'add-search'
-        inputBuffer = ''
-        addCursor = 0
+        if (stack.length > 1) { stack.pop(); draw() }
+      } else if (key === 's') {
+        inputMode = 'sources'
+        srcList = getSrcList()
+        srcCursor = 0
         draw()
       } else if (key === 'n') {
-        inputMode = 'new'
-        inputBuffer = ''
-        draw()
+        inputMode = 'new'; inputBuffer = ''; draw()
       } else if (key === 'e') {
         const row = rowList[current().cursor]
-        if (row?.kind === 'folder') {
-          inputMode = 'rename'
-          inputBuffer = row.key!.split('/').pop()!
-          draw()
-        }
+        if (row?.kind === 'folder') { inputMode = 'rename'; inputBuffer = row.key!.split('/').pop()!; draw() }
       } else if (key === 'd') {
         const row = rowList[current().cursor]
         if (row?.kind === 'folder') {
           const path = row.key!
-          const hasSourcesInside = cfg.sources.some(s => s.group === path || s.group.startsWith(path + '/'))
-          if (hasSourcesInside) {
-            // Can't delete — has sources. Could show a message but for now just ignore.
-          } else {
+          if (!cfg.sources.some(s => s.group === path || s.group.startsWith(path + '/'))) {
             cfg.folders = cfg.folders.filter(f => f !== path && !f.startsWith(path + '/'))
             cfg.activeGroups = cfg.activeGroups.filter(g => g !== path && !g.startsWith(path + '/'))
             dirty = true
-            // Adjust cursor if needed
             rowList = buildRows(cfg, current().path)
-            if (current().cursor >= rowList.length) {
-              current().cursor = Math.max(0, rowList.length - 1)
-            }
-            current().cursor = findNext(rowList, current().cursor, -1)
+            current().cursor = Math.min(current().cursor, Math.max(0, rowList.length - 1))
             draw()
           }
         }
