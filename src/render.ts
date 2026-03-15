@@ -338,7 +338,7 @@ export const renderInteractive = (allItems: FeedItem[], olderCount = 0, hasSourc
       : ''
     const idx = Math.max(0, cursor)
     const nav = `${idx + 1}/${items.length}`
-    const hint = '\u2191\u2193 scroll  \u2190\u2192 prev/next  esc back'
+    const hint = '\u2191\u2193/jk scroll  space/b page  h/l prev/next  esc back'
     const gap = Math.max(1, termW - pos.length - nav.length - hint.length - 6)
     lines.push(`${BG_BAR}${WHITE} ${nav} ${pos}${' '.repeat(gap)}${DIM}${hint}${RESET}`)
 
@@ -442,21 +442,35 @@ export const renderInteractive = (allItems: FeedItem[], olderCount = 0, hasSourc
 
       // ── Reader mode ──
       if (readerMode) {
-        if (key === '\x1b' || key === 'q') {
-          readerMode = false; draw(); return // back to list
+        // Only bare Esc (length 1) exits — not arrow key prefixes
+        if ((key === '\x1b' && key.length === 1) || key === 'q') {
+          readerMode = false; draw(); return
         }
         const visible = rows() - 4
-        if (key === '\x1b[A' || key === 'k') { // scroll up
+        const maxScroll = Math.max(0, readerLines.length - visible)
+        // Scroll up: arrow / k / page-up
+        if (key === '\x1b[A' || key === 'k') {
           readerScroll = Math.max(0, readerScroll - 1); drawReader(); return
         }
-        if (key === '\x1b[B' || key === 'j' || key === ' ') { // scroll down
-          readerScroll = Math.min(Math.max(0, readerLines.length - visible), readerScroll + 1); drawReader(); return
+        // Scroll down: arrow / j
+        if (key === '\x1b[B' || key === 'j') {
+          readerScroll = Math.min(maxScroll, readerScroll + 1); drawReader(); return
         }
-        if (key === '\x1b[D') { // left: previous article
+        // Page down: space
+        if (key === ' ') {
+          readerScroll = Math.min(maxScroll, readerScroll + visible); drawReader(); return
+        }
+        // Page up: b
+        if (key === 'b') {
+          readerScroll = Math.max(0, readerScroll - visible); drawReader(); return
+        }
+        // Previous article: left / h
+        if (key === '\x1b[D' || key === 'h') {
           if (cursor > 0) { cursor--; openReader(cursor) }
           return
         }
-        if (key === '\x1b[C') { // right: next article
+        // Next article: right / l
+        if (key === '\x1b[C' || key === 'l') {
           if (cursor < items.length - 1) { cursor++; openReader(cursor) }
           return
         }
