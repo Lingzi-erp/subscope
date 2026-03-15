@@ -33,14 +33,22 @@ export const load = (): Config => {
   ensureDir()
   if (!existsSync(CONFIG_FILE)) return { activeGroups: [], defaultMode: 'formal', modes: DEFAULT_MODES, sources: [] }
   const raw = parse(readFileSync(CONFIG_FILE, 'utf-8')) as any
-  // Migrate: old configs without group/active/activeGroups/modes
+  // Migrate: old configs + flat groups → nested groups
+  const migrateGroup = (g: string) => {
+    if (g.includes('/')) return g // already nested
+    const map: Record<string, string> = {
+      anthropic: 'ai/anthropic', claude: 'ai/claude', openai: 'ai/openai',
+      deepmind: 'ai/deepmind', deepseek: 'ai/deepseek', xai: 'ai/xai',
+    }
+    return map[g] ?? g
+  }
   const sources: Source[] = (raw?.sources ?? []).map((s: any) => ({
     ...s,
-    group: s.group ?? inferGroup(s.url),
+    group: migrateGroup(s.group ?? inferGroup(s.url)),
     active: s.active ?? true,
   }))
-  const groups = [...new Set(sources.map(s => s.group))]
-  const activeGroups: string[] = raw?.activeGroups ?? groups
+  const rawGroups: string[] = raw?.activeGroups ?? [...new Set(sources.map(s => s.group))]
+  const activeGroups = rawGroups.map(migrateGroup)
   const defaultMode: ModeName = raw?.defaultMode ?? 'formal'
   const modes: Record<string, ModeConfig> = raw?.modes ?? DEFAULT_MODES
   return { activeGroups, defaultMode, modes, sources }
@@ -70,17 +78,20 @@ export const inferGroup = (url: string): string => {
   // YouTube / X / GitHub: infer from handle/org
   if (hostname.includes('youtube.com') || hostname.includes('twitter.com') || hostname.includes('x.com') || hostname === 'github.com') {
     const handle = pathname.match(/@?([\w-]+)/)?.[1]?.toLowerCase() ?? ''
-    if (handle.includes('anthropic')) return 'anthropic'
-    if (handle.includes('claude')) return 'claude'
-    if (handle.includes('deepseek')) return 'deepseek'
-    if (handle.includes('openai')) return 'openai'
-    if (handle.includes('xai') || handle.includes('grok')) return 'xai'
+    if (handle.includes('anthropic')) return 'ai/anthropic'
+    if (handle.includes('claude')) return 'ai/claude'
+    if (handle.includes('deepseek')) return 'ai/deepseek'
+    if (handle.includes('openai')) return 'ai/openai'
+    if (handle.includes('deepmind')) return 'ai/deepmind'
+    if (handle.includes('xai') || handle.includes('grok')) return 'ai/xai'
     return handle || hostname.split('.')[0]!
   }
-  if (hostname.includes('anthropic.com')) return 'anthropic'
-  if (hostname.includes('claude')) return 'claude'
-  if (hostname.includes('deepseek')) return 'deepseek'
-  if (hostname === 'x.ai') return 'xai'
+  if (hostname.includes('anthropic.com')) return 'ai/anthropic'
+  if (hostname.includes('claude')) return 'ai/claude'
+  if (hostname.includes('deepseek')) return 'ai/deepseek'
+  if (hostname.includes('openai.com')) return 'ai/openai'
+  if (hostname.includes('deepmind')) return 'ai/deepmind'
+  if (hostname === 'x.ai') return 'ai/xai'
   return hostname.replace('www.', '').split('.')[0]!
 }
 
@@ -91,8 +102,8 @@ export const activeSources = (config: Config, opts?: { group?: string; mode?: st
 
   return config.sources.filter(s => {
     if (!s.active) return false
-    if (opts?.group) return s.group === opts.group
-    if (!config.activeGroups.includes(s.group)) return false
+    if (opts?.group) return s.group === opts.group || s.group.startsWith(opts.group + '/')
+    if (!config.activeGroups.some(g => s.group === g || s.group.startsWith(g + '/'))) return false
     if (modeConfig) return modeConfig.types.includes(s.type)
     return true
   })

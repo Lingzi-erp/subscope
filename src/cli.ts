@@ -113,10 +113,11 @@ const commands: Record<string, () => Promise<void>> = {
     }
 
     const action = args[1]
+    const allGroups = [...new Set(config.sources.map(s => s.group))]
 
-    // subscope group <name> — show sources in group
+    // subscope group <path> — show sources matching prefix
     if (!action) {
-      const sources = config.sources.filter(s => s.group === sub)
+      const sources = config.sources.filter(s => s.group === sub || s.group.startsWith(sub + '/'))
       if (sources.length === 0) {
         console.log(`\n  Group "${sub}" not found or empty.\n`)
         return
@@ -125,20 +126,28 @@ const commands: Record<string, () => Promise<void>> = {
       return
     }
 
-    // subscope group <name> on/off
+    // subscope group <path> on/off — supports prefix (e.g. "ai" activates all ai/*)
     if (action === 'on') {
-      if (!config.activeGroups.includes(sub)) {
-        config.activeGroups.push(sub)
+      // Find all leaf groups matching this prefix
+      const matching = allGroups.filter(g => g === sub || g.startsWith(sub + '/'))
+      if (matching.length === 0) {
+        console.log(`\n  No groups matching "${sub}".\n`)
+        return
+      }
+      for (const g of matching) {
+        if (!config.activeGroups.includes(g)) config.activeGroups.push(g)
       }
       save(config)
-      console.log(`\n  Group "${sub}" activated.\n`)
+      console.log(`\n  Activated: ${matching.join(', ')}\n`)
       return
     }
 
     if (action === 'off') {
-      config.activeGroups = config.activeGroups.filter(g => g !== sub)
+      const before = config.activeGroups.length
+      config.activeGroups = config.activeGroups.filter(g => g !== sub && !g.startsWith(sub + '/'))
       save(config)
-      console.log(`\n  Group "${sub}" deactivated.\n`)
+      const removed = before - config.activeGroups.length
+      console.log(`\n  Deactivated ${removed} group${removed !== 1 ? 's' : ''} matching "${sub}".\n`)
       return
     }
 

@@ -218,23 +218,47 @@ export const renderSources = (sources: { id: string; type: string; name: string;
 // ── Groups list ──
 
 export const renderGroups = (config: { activeGroups: string[]; sources: { group: string; active?: boolean; name: string; type: string }[] }): void => {
-  const groups = [...new Set(config.sources.map(s => s.group))]
+  const groups = [...new Set(config.sources.map(s => s.group))].sort()
   if (groups.length === 0) {
     console.log(`\n${DIM}  No groups.${RESET}\n`)
     return
   }
 
+  // Build tree from paths
+  const printed = new Set<string>()
   console.log()
+
   for (const g of groups) {
-    const active = config.activeGroups.includes(g)
+    const parts = g.split('/')
+    // Print parent nodes that haven't been printed yet
+    for (let i = 0; i < parts.length - 1; i++) {
+      const prefix = parts.slice(0, i + 1).join('/')
+      if (printed.has(prefix)) continue
+      printed.add(prefix)
+
+      const indent = '  '.repeat(i)
+      const isActive = config.activeGroups.some(ag => ag === prefix || ag.startsWith(prefix + '/'))
+      const childSources = config.sources.filter(s => s.group.startsWith(prefix + '/') || s.group === prefix)
+      const activeCount = childSources.filter(s => s.active !== false).length
+      const icon = isActive ? `${BOLD}\u25b8${RESET}` : `${GRAY}\u25b8${RESET}`
+      const label = isActive ? `${BOLD}${parts[i]}${RESET}` : `${GRAY}${parts[i]}${RESET}`
+      console.log(`${indent}  ${icon} ${label}  ${DIM}${activeCount}/${childSources.length} sources${RESET}`)
+    }
+
+    // Print the leaf group
+    const depth = parts.length - 1
+    const indent = '  '.repeat(depth)
+    const leafName = parts[parts.length - 1]!
+    const isActive = config.activeGroups.includes(g) || config.activeGroups.some(ag => g.startsWith(ag + '/'))
     const sample = config.sources.find(s => s.group === g)!
     const color = sourceColor(sample.name, sample.type, g)
-    const icon = active ? `${color}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
+    const icon = isActive ? `${color}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
     const sources = config.sources.filter(s => s.group === g)
     const activeCount = sources.filter(s => s.active !== false).length
-    const label = active ? `${BOLD}${g}${RESET}` : `${GRAY}${g}${RESET}`
-    console.log(`  ${icon} ${label}  ${DIM}${activeCount}/${sources.length} sources${RESET}`)
+    const label = isActive ? `${BOLD}${leafName}${RESET}` : `${GRAY}${leafName}${RESET}`
+    console.log(`${indent}  ${icon} ${label}  ${DIM}${activeCount}/${sources.length} sources${RESET}`)
   }
-  console.log(`\n  ${DIM}subscope group <name> on/off${RESET}`)
+
+  console.log(`\n  ${DIM}subscope group <path> on/off${RESET}`)
   console.log()
 }
