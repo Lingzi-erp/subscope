@@ -67,9 +67,14 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     ...site?.headers,
   }
 
+  let html: string
   const res = await fetch(url, { headers, tls: { rejectUnauthorized: false } } as any)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const html = await res.text()
+  if (!res.ok) {
+    // Fallback: use Playwright for sites that block non-browser requests (e.g. BLS)
+    html = await fetchWithBrowser(url)
+  } else {
+    html = await res.text()
+  }
   const $ = cheerio.load(html)
 
   // Extract title
@@ -109,6 +114,53 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
 const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string => {
   const blocks: string[] = []
 
+  const cellText = (el: any): string =>
+    $(el).text().replace(/\s+/g, ' ').trim()
+
+  const renderTable = (node: any) => {
+    const rows: string[][] = []
+    $(node).find('tr').each((_, tr) => {
+      const cells: string[] = []
+      $(tr).find('th, td').each((_, cell) => {
+        cells.push(cellText(cell))
+      })
+      if (cells.some(c => c)) rows.push(cells)
+    })
+    if (!rows.length) return
+
+    // Compute column widths
+    const colCount = Math.max(...rows.map(r => r.length))
+    const widths: number[] = Array(colCount).fill(0)
+    for (const row of rows) {
+      for (let i = 0; i < row.length; i++) {
+        widths[i] = Math.max(widths[i]!, row[i]!.length)
+      }
+    }
+    // Cap column width to keep tables readable
+    const maxCol = 30
+    for (let i = 0; i < widths.length; i++) widths[i] = Math.min(widths[i]!, maxCol)
+
+    const pad = (s: string, w: number) => {
+      const t = s.length > w ? s.slice(0, w) : s
+      return t + ' '.repeat(Math.max(0, w - t.length))
+    }
+
+    const fmtRow = (row: string[]) =>
+      '| ' + row.map((c, i) => pad(c, widths[i]!)).join(' | ') + ' |'
+
+    blocks.push('\n')
+    // First row as header
+    blocks.push(fmtRow(rows[0]!))
+    blocks.push('\n')
+    blocks.push('|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|')
+    blocks.push('\n')
+    for (let i = 1; i < rows.length; i++) {
+      blocks.push(fmtRow(rows[i]!))
+      blocks.push('\n')
+    }
+    blocks.push('\n')
+  }
+
   const walk = (node: any) => {
     if (node.type === 'text') {
       const t = node.data?.replace(/\s+/g, ' ') ?? ''
@@ -118,35 +170,59 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     if (node.type !== 'tag') return
 
     const tag = node.name?.toLowerCase()
-    // Skip hidden or irrelevant elements
     if (['script', 'style', 'nav', 'footer', 'img', 'svg', 'iframe'].includes(tag)) return
 
-    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'tr', 'blockquote', 'pre', 'section', 'article'].includes(tag)
+    // Tables: render as Markdown table
+    if (tag === 'table') { renderTable(node); return }
+
+    const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'pre', 'section', 'article'].includes(tag)
     const isHeading = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tag)
 
     if (isBlock) blocks.push('\n')
     if (isHeading) blocks.push('\n## ')
 
-    // Table cells: add separator
-    if (tag === 'td' || tag === 'th') blocks.push(' | ')
-
     for (const child of node.children ?? []) walk(child)
 
     if (isBlock) blocks.push('\n')
     if (tag === 'br') blocks.push('\n')
-    if (tag === 'tr') blocks.push('\n')
   }
 
   for (const child of $el[0]?.children ?? []) walk(child)
 
   return blocks
     .join('')
-    .replace(/[ \t]+/g, ' ')           // collapse horizontal whitespace
+    .replace(/[ \t]+/g, ' ')           // collapse horizontal whitespace (but not inside table rows)
+    .replace(/\n[ \t]+\|/g, '\n|')     // trim before table pipes
     .replace(/\n[ \t]+/g, '\n')         // trim line starts
     .replace(/[ \t]+\n/g, '\n')         // trim line ends
     .replace(/\n{3,}/g, '\n\n')         // max 2 consecutive newlines
-    .replace(/^\|/gm, '')              // strip leading table pipes
-    .replace(/\| *$/gm, '')            // strip trailing table pipes
     .replace(/\u00a0/g, ' ')           // replace nbsp
     .trim()
+}
+
+// Playwright fallback for anti-bot sites (BLS, etc.)
+// Spawns Edge with anti-detection flags via node + playwright
+const fetchWithBrowser = (url: string): Promise<string> => {
+  const script = [
+    `const{chromium}=require('playwright');`,
+    `(async()=>{`,
+    `const b=await chromium.launch({headless:true,channel:'chrome',`,
+    `args:['--disable-blink-features=AutomationControlled','--ignore-certificate-errors']});`,
+    `const ctx=await b.newContext({ignoreHTTPSErrors:true,userAgent:`,
+    `'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'});`,
+    `const p=await ctx.newPage();`,
+    `await p.addInitScript(()=>{Object.defineProperty(navigator,'webdriver',{get:()=>false})});`,
+    `await p.goto(${JSON.stringify(url)},{waitUntil:'domcontentloaded',timeout:20000});`,
+    `process.stdout.write(await p.content());`,
+    `await b.close();`,
+    `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
+  ].join('')
+  const r = Bun.spawnSync(['node', '-e', script], {
+    stdout: 'pipe', stderr: 'pipe', timeout: 30_000,
+  })
+  if (r.exitCode !== 0) {
+    const err = new TextDecoder().decode(r.stderr).trim()
+    throw new Error(`Browser fetch failed: ${err || 'unknown error'}`)
+  }
+  return Promise.resolve(new TextDecoder().decode(r.stdout))
 }
