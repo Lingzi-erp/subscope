@@ -177,15 +177,24 @@ const toggle = (cfg: Config, row: Row) => {
     cfg.defaultMode = row.key!
   } else if (row.kind === 'folder') {
     const path = row.key!
-    // Toggle all leaf groups under this path
-    const leafGroups = [...new Set(cfg.sources.map(s => s.group))]
-      .filter(g => g === path || g.startsWith(path + '/'))
-    const allActive = leafGroups.every(g => cfg.activeGroups.includes(g))
-    if (allActive) {
-      cfg.activeGroups = cfg.activeGroups.filter(g => g !== path && !g.startsWith(path + '/'))
+    const isActive = isFolderActive(cfg, path)
+
+    // Collect ALL paths under this folder (from folders list + source groups)
+    const allPaths = new Set<string>()
+    for (const f of cfg.folders) {
+      if (f === path || f.startsWith(path + '/')) allPaths.add(f)
+    }
+    for (const s of cfg.sources) {
+      if (s.group === path || s.group.startsWith(path + '/')) allPaths.add(s.group)
+    }
+
+    if (isActive) {
+      // Turn off: remove all matching from activeGroups
+      cfg.activeGroups = cfg.activeGroups.filter(g => !allPaths.has(g))
     } else {
-      for (const g of leafGroups) {
-        if (!cfg.activeGroups.includes(g)) cfg.activeGroups.push(g)
+      // Turn on: add all matching to activeGroups
+      for (const p of allPaths) {
+        if (!cfg.activeGroups.includes(p)) cfg.activeGroups.push(p)
       }
     }
   } else if (row.kind === 'source') {
