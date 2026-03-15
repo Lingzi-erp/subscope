@@ -1,12 +1,32 @@
-// Windows toast notification — zero dependencies
+import { join } from 'path'
+import { homedir } from 'os'
+
+const BUN = join(homedir(), '.bun', 'bin', 'bun.exe')
+const CLI = join(import.meta.dir, 'cli.ts')
+
+// Windows toast notification — click opens subscope with latest items
 export const notify = (title: string, body: string) => {
+  // Toast with click action: launch subscope in a new terminal
+  const launchCmd = `cmd /c start "subscope" "${BUN}" "${CLI}" -n 20`
+    .replace(/\\/g, '\\\\').replace(/"/g, '&quot;')
+
   const ps = `
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
 [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
-$xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-$text = $xml.GetElementsByTagName("text")
-$text.Item(0).AppendChild($xml.CreateTextNode("${title.replace(/"/g, '`"')}")) | Out-Null
-$text.Item(1).AppendChild($xml.CreateTextNode("${body.replace(/"/g, '`"')}")) | Out-Null
+
+$xmlStr = @"
+<toast activationType="protocol" launch="${launchCmd}">
+  <visual>
+    <binding template="ToastGeneric">
+      <text>${title}</text>
+      <text>${body}</text>
+    </binding>
+  </visual>
+</toast>
+"@
+
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml($xmlStr)
 $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("subscope").Show($toast)
 `

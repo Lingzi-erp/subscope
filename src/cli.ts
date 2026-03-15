@@ -98,9 +98,14 @@ const commands: Record<string, () => Promise<void>> = {
       return
     }
 
-    console.log('\n  Fetching...\n')
+    const silent = args.includes('--notify')
+    if (!silent) console.log('\n  Fetching...\n')
     const newItems = await fetchAll()
-    console.log(`\n  Done. ${newItems} new items.\n`)
+    if (silent) {
+      if (newItems > 0) notify('subscope', `${newItems} new item${newItems > 1 ? 's' : ''}`)
+    } else {
+      console.log(`\n  Done. ${newItems} new items.\n`)
+    }
   },
 
   watch: async () => {
@@ -122,6 +127,41 @@ const commands: Record<string, () => Promise<void>> = {
     setInterval(tick, ms)
     // Keep alive
     await new Promise(() => {})
+  },
+
+  'watch-install': async () => {
+    const minutes = parseInt(args[0] ?? '10')
+    const { join } = await import('path')
+    const { homedir } = await import('os')
+
+    const bun = join(homedir(), '.bun', 'bin', 'bun.exe').replace(/\//g, '\\')
+    const cli = join(import.meta.dir, 'cli.ts').replace(/\//g, '\\')
+    const action = `"${bun}" "${cli}" fetch --notify`
+
+    // Create Windows Scheduled Task
+    const ps = `
+$action = New-ScheduledTaskAction -Execute "powershell" -Argument "-NoProfile -WindowStyle Hidden -Command & '${bun}' '${cli}' fetch --notify"
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes ${minutes}) -RepetitionDuration ([TimeSpan]::MaxValue)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+Register-ScheduledTask -TaskName "subscope" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+Write-Output "ok"
+`
+    const result = Bun.spawnSync(['powershell', '-NoProfile', '-Command', ps])
+    const out = new TextDecoder().decode(result.stdout).trim()
+
+    if (out === 'ok') {
+      console.log(`\n  Installed. subscope will fetch every ${minutes}m in the background.`)
+      console.log(`  New items trigger a Windows notification.`)
+      console.log(`  Remove with: subscope watch-uninstall\n`)
+    } else {
+      console.error('\n  Failed to create scheduled task. Try running as administrator.\n')
+    }
+  },
+
+  'watch-uninstall': async () => {
+    const ps = `Unregister-ScheduledTask -TaskName "subscope" -Confirm:$false 2>$null; Write-Output "ok"`
+    Bun.spawnSync(['powershell', '-NoProfile', '-Command', ps])
+    console.log('\n  Scheduled task removed.\n')
   },
 
   group: async () => {
