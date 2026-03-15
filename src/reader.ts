@@ -157,33 +157,62 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     let dataStart = rows.findIndex(r => isNumRow(r))
     if (dataStart < 0) dataStart = rows.length > 2 ? 2 : 1
 
-    const finalRows = rows
+    // Flatten multi-row headers into one row: "GroupName: SubColumn" format
+    // Track last non-empty group label per column (from colspan spans)
+    const header: string[] = Array(colCount).fill('')
+    if (dataStart <= 1) {
+      // Single header row — use as-is
+      for (let c = 0; c < colCount; c++) header[c] = (rows[0]![c] ?? '').trim()
+    } else {
+      // Multi-row: propagate group labels across their colspan span, then combine
+      // Row 0 typically has group headers with empty cells for spanned columns
+      // Row 1+ has specific column names
+      const groups: string[] = Array(colCount).fill('')
+      for (let r = 0; r < dataStart - 1; r++) {
+        let lastGroup = ''
+        for (let c = 0; c < colCount; c++) {
+          const val = (rows[r]![c] ?? '').trim()
+          if (val) lastGroup = val
+          else if (lastGroup && !groups[c]) groups[c] = lastGroup
+          if (val) groups[c] = val
+        }
+      }
+      // Last header row has the specific column names
+      const lastHeaderRow = rows[dataStart - 1]!
+      for (let c = 0; c < colCount; c++) {
+        const sub = (lastHeaderRow[c] ?? '').trim()
+        const group = groups[c]
+        if (sub && group && sub !== group) {
+          header[c] = `${group}: ${sub}`
+        } else {
+          header[c] = sub || group
+        }
+      }
+    }
+
+    const dataRows = rows.slice(dataStart)
+    const finalRows = [header, ...dataRows]
+
     const widths: number[] = Array(colCount).fill(0)
     for (const row of finalRows) {
       for (let i = 0; i < row.length; i++) {
-        widths[i] = Math.max(widths[i]!, row[i]!.length)
+        widths[i] = Math.max(widths[i]!, (row[i] ?? '').length)
       }
     }
-    const maxCol = 30
-    for (let i = 0; i < widths.length; i++) widths[i] = Math.min(widths[i]!, maxCol)
 
-    const pad = (s: string, w: number) => {
-      const t = s.length > w ? s.slice(0, w) : s
-      return t + ' '.repeat(Math.max(0, w - t.length))
-    }
+    const pad = (s: string, w: number) => s + ' '.repeat(Math.max(0, w - s.length))
 
     const fmtRow = (row: string[]) =>
-      '| ' + row.map((c, i) => pad(c, widths[i]!)).join(' | ') + ' |'
+      '| ' + row.map((c, i) => pad(c ?? '', widths[i]!)).join(' | ') + ' |'
 
     blocks.push('\n')
-    for (let i = 0; i < finalRows.length; i++) {
+    blocks.push(fmtRow(finalRows[0]!))
+    blocks.push('\n')
+    blocks.push('|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|')
+    blocks.push('\n')
+    for (let i = 1; i < finalRows.length; i++) {
       blocks.push(fmtRow(finalRows[i]!))
       blocks.push('\n')
-      // Separator after last header row
-      if (i === dataStart - 1) {
-        blocks.push('|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|')
-        blocks.push('\n')
-      }
     }
     blocks.push('\n')
   }
