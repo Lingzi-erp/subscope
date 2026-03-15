@@ -22,14 +22,16 @@ const PURPLE = c(141)    // default / other
 
 // ── Source color mapping ──
 
-const sourceColor = (name: string, type: string): string => {
+const sourceColor = (name: string, type: string, group?: string): string => {
+  const g = group?.toLowerCase() ?? ''
   const n = name.toLowerCase()
-  if (n.includes('anthropic')) return ORANGE
-  if (n.includes('claude') || n.includes('support')) return PEACH
-  if (n.includes('deepseek')) return TEAL
-  if (type === 'youtube') return RED
-  if (type === 'twitter') return BLUE
-  if (n.includes('github')) return GREEN
+  // Brand colors by group
+  if (g === 'anthropic' || n.includes('anthropic')) return ORANGE
+  if (g === 'claude' || n.includes('claude') || n.includes('support')) return PEACH
+  if (g === 'openai' || n.includes('openai') || n.includes('openai')) return GREEN
+  if (g === 'deepmind' || n.includes('deepmind') || n.includes('googledeepmind')) return BLUE
+  if (g === 'deepseek' || n.includes('deepseek')) return TEAL
+  if (n.includes('github')) return c(248) // light gray
   return PURPLE
 }
 
@@ -203,7 +205,7 @@ export const renderSources = (sources: { id: string; type: string; name: string;
 
   console.log()
   for (const s of sources) {
-    const color = sourceColor(s.name, s.type)
+    const color = sourceColor(s.name, s.type, s.group)
     const status = s.active === false ? `${GRAY}\u25cb${RESET}` : `${color}\u25cf${RESET}`
     const grp = s.group ? `${DIM}[${s.group}]${RESET}` : ''
     console.log(`  ${status} ${BOLD}${s.id}${RESET}  ${s.name}  ${grp}`)
@@ -225,7 +227,7 @@ export const renderGroups = (config: { activeGroups: string[]; sources: { group:
   for (const g of groups) {
     const active = config.activeGroups.includes(g)
     const sample = config.sources.find(s => s.group === g)!
-    const color = sourceColor(sample.name, sample.type)
+    const color = sourceColor(sample.name, sample.type, g)
     const icon = active ? `${color}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
     const sources = config.sources.filter(s => s.group === g)
     const activeCount = sources.filter(s => s.active !== false).length
