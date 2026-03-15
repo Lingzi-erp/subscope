@@ -1,12 +1,39 @@
 import type { FeedItem } from './types.ts'
 
+// ── ANSI palette ──
+
 const RESET = '\x1b[0m'
 const BOLD = '\x1b[1m'
 const DIM = '\x1b[2m'
-const CYAN = '\x1b[36m'
-const GRAY = '\x1b[90m'
+const ITALIC = '\x1b[3m'
 const WHITE = '\x1b[37m'
-const BG_GRAY = '\x1b[48;5;236m'
+const GRAY = '\x1b[90m'
+const BG_BAR = '\x1b[48;5;236m'
+
+// 256-color source palette
+const c = (n: number) => `\x1b[38;5;${n}m`
+const ORANGE = c(208)   // Anthropic
+const PEACH = c(216)     // Claude
+const RED = c(196)       // YouTube
+const BLUE = c(75)       // X / Twitter
+const GREEN = c(114)     // GitHub
+const TEAL = c(80)       // DeepSeek
+const PURPLE = c(141)    // default / other
+
+// ── Source color mapping ──
+
+const sourceColor = (name: string, type: string): string => {
+  const n = name.toLowerCase()
+  if (n.includes('anthropic')) return ORANGE
+  if (n.includes('claude') || n.includes('support')) return PEACH
+  if (n.includes('deepseek')) return TEAL
+  if (type === 'youtube') return RED
+  if (type === 'twitter') return BLUE
+  if (n.includes('github')) return GREEN
+  return PURPLE
+}
+
+// ── Helpers ──
 
 const cols = () => process.stdout.columns || 80
 const rows = () => process.stdout.rows || 24
@@ -15,18 +42,12 @@ const PREFIX_LEN = 4
 const truncate = (text: string, max: number) =>
   text.length <= max ? text : text.slice(0, max - 1) + '\u2026'
 
-// "anthropic.com/blog" → "Anthropic · blog"
-// "support.claude.com/en/collections/18031876-usage-and-limits" → "Claude Support · usage-and-limits"
 const formatSourceName = (name: string): string => {
   if (!name) return 'unknown'
-
-  // Special case: support.claude.com → "Claude Support · <slug>"
   if (name.startsWith('support.claude')) {
     const slug = name.split('/').pop()?.replace(/^\d+-/, '') ?? 'support'
     return `Claude Support \u00b7 ${slug}`
   }
-
-  // Strip TLD, split by "/", capitalize first segment
   const parts = name.replace(/\.(com|org|net|io|ai|dev)/, '').split('/')
   parts[0] = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1)
   return parts.join(' \u00b7 ')
@@ -43,22 +64,41 @@ const timeAgo = (iso: string): string => {
   return `${days}d ago`
 }
 
+// ── Logo ──
+
+const LOGO = [
+  `${c(75)}  ┌─╴${c(80)}╭─╴${c(114)}┌─╮${c(208)}╭─╮${c(216)}╭─╮${c(141)}╭─╮${c(196)}╭─╮${c(75)}╭─╮`,
+  `${c(75)}  └─╮${c(80)}│  ${c(114)}│ │${c(208)}├─╯${c(216)}├─╮${c(141)}│  ${c(196)}│ │${c(75)}├─╯`,
+  `${c(75)}  ╶─┘${c(80)}╰─╴${c(114)}└─╯${c(208)}╵  ${c(216)}╰─╯${c(141)}╰─╯${c(196)}╵  ${c(75)}╰─╴`,
+  RESET,
+]
+
+const printLogo = () => {
+  for (const line of LOGO) console.log(line)
+}
+
+// ── Format single feed item ──
+
 const formatItem = (item: FeedItem, maxWidth: number): string[] => {
+  const color = sourceColor(item.sourceName, item.sourceType)
   const lines: string[] = []
-  lines.push(` ${CYAN}\u250c\u2500${RESET} ${BOLD}${truncate(item.title, maxWidth)}${RESET}`)
+
+  lines.push(` ${color}\u250c\u2500${RESET} ${BOLD}${truncate(item.title, maxWidth)}${RESET}`)
   if (item.summary) {
     const cleaned = item.summary.replace(/<[^>]*>/g, '').trim()
     if (cleaned) {
-      lines.push(` ${CYAN}\u2502${RESET}  ${DIM}${truncate(cleaned, maxWidth)}${RESET}`)
+      lines.push(` ${color}\u2502${RESET}  ${DIM}${truncate(cleaned, maxWidth)}${RESET}`)
     }
   }
-  lines.push(` ${CYAN}\u2502${RESET}  ${GRAY}${formatSourceName(item.sourceName)} \u00b7 ${timeAgo(item.publishedAt)}${RESET}`)
-  lines.push(` ${CYAN}\u2502${RESET}  ${DIM}\u2192 ${item.url}${RESET}`)
+  const srcName = formatSourceName(item.sourceName)
+  const time = timeAgo(item.publishedAt)
+  lines.push(` ${color}\u2502${RESET}  ${color}${srcName}${RESET} ${GRAY}\u00b7 ${time}${RESET}`)
+  lines.push(` ${color}\u2502${RESET}  ${DIM}\u2192 ${item.url}${RESET}`)
   lines.push('')
   return lines
 }
 
-// ── non-interactive (for pipes / -n) ──
+// ── Non-interactive feed ──
 
 export const renderFeed = (items: FeedItem[], olderCount = 0, hasSources = true): void => {
   if (items.length === 0) {
@@ -76,6 +116,7 @@ export const renderFeed = (items: FeedItem[], olderCount = 0, hasSources = true)
   }
 
   console.log()
+  printLogo()
   const maxWidth = cols() - PREFIX_LEN
   for (const item of items) {
     for (const line of formatItem(item, maxWidth)) console.log(line)
@@ -87,7 +128,7 @@ export const renderFeed = (items: FeedItem[], olderCount = 0, hasSources = true)
   }
 }
 
-// ── interactive pager ──
+// ── Interactive pager ──
 
 export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources = true): Promise<void> => {
   if (items.length === 0) {
@@ -95,18 +136,19 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
     return Promise.resolve()
   }
 
-  // Pre-render all items into line groups
   const maxWidth = cols() - PREFIX_LEN
   const rendered = items.map(item => formatItem(item, maxWidth))
 
-  // Paginate by terminal height
+  // First page gets the logo
+  const logoLines = LOGO.map(l => l)
+
   const footerHeight = 2
   const availableRows = rows() - footerHeight
   const pages: string[][] = []
-  let current: string[] = []
+  let current: string[] = [...logoLines]
 
   for (const group of rendered) {
-    if (current.length + group.length > availableRows && current.length > 0) {
+    if (current.length + group.length > availableRows && current.length > logoLines.length) {
       pages.push(current)
       current = []
     }
@@ -115,32 +157,29 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
   if (current.length > 0) pages.push(current)
 
   if (pages.length <= 1) {
-    // Only one page — no need for interactive mode
     console.log()
-    for (const line of (pages[0] ?? [])) console.log(line)
+    printLogo()
+    for (const line of rendered.flat()) console.log(line)
     return Promise.resolve()
   }
 
   let page = 0
 
   const draw = () => {
-    // Alternate screen would be nicer, but clear is simpler and more compatible
-    process.stdout.write('\x1b[2J\x1b[H') // clear + cursor home
-    process.stdout.write('\n')
+    process.stdout.write('\x1b[2J\x1b[H\n')
     for (const line of pages[page]!) {
       process.stdout.write(line + '\n')
     }
-    // Pad remaining space
     const used = (pages[page]?.length ?? 0) + footerHeight + 1
     const padding = Math.max(0, rows() - used)
     for (let i = 0; i < padding; i++) process.stdout.write('\n')
-    // Status bar
+
     const left = page > 0 ? '\u2190' : ' '
     const right = page < pages.length - 1 ? '\u2192' : ' '
     const status = ` ${left}  Page ${page + 1}/${pages.length}  ${right}`
     const hint = 'q quit'
     const gap = Math.max(1, cols() - status.length - hint.length - 2)
-    process.stdout.write(`${BG_GRAY}${WHITE}${status}${' '.repeat(gap)}${DIM}${hint}${RESET}\n`)
+    process.stdout.write(`${BG_BAR}${WHITE}${status}${' '.repeat(gap)}${DIM}${hint}${RESET}\n`)
   }
 
   return new Promise<void>(resolve => {
@@ -152,23 +191,14 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
       process.stdin.setRawMode(false)
       process.stdin.pause()
       process.stdin.removeListener('data', onKey)
-      process.stdout.write('\x1b[2J\x1b[H') // clear on exit
+      process.stdout.write('\x1b[2J\x1b[H')
       resolve()
     }
 
     const onKey = (key: string) => {
-      if (key === 'q' || key === '\x1b' || key === '\x03') { // q, ESC, Ctrl+C
-        cleanup()
-        return
-      }
-      if ((key === '\x1b[C' || key === 'l') && page < pages.length - 1) { // right, l
-        page++
-        draw()
-      }
-      if ((key === '\x1b[D' || key === 'h') && page > 0) { // left, h
-        page--
-        draw()
-      }
+      if (key === 'q' || key === '\x1b' || key === '\x03') { cleanup(); return }
+      if ((key === '\x1b[C' || key === 'l') && page < pages.length - 1) { page++; draw() }
+      if ((key === '\x1b[D' || key === 'h') && page > 0) { page--; draw() }
     }
 
     process.stdin.on('data', onKey)
@@ -176,7 +206,7 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
   })
 }
 
-// ── sources list ──
+// ── Sources list ──
 
 export const renderSources = (sources: { id: string; type: string; name: string; url: string; group?: string; active?: boolean }[]): void => {
   if (sources.length === 0) {
@@ -186,7 +216,8 @@ export const renderSources = (sources: { id: string; type: string; name: string;
 
   console.log()
   for (const s of sources) {
-    const status = s.active === false ? `${GRAY}\u25cb${RESET}` : `${CYAN}\u25cf${RESET}`
+    const color = sourceColor(s.name, s.type)
+    const status = s.active === false ? `${GRAY}\u25cb${RESET}` : `${color}\u25cf${RESET}`
     const grp = s.group ? `${DIM}[${s.group}]${RESET}` : ''
     console.log(`  ${status} ${BOLD}${s.id}${RESET}  ${s.name}  ${grp}`)
     console.log(`             ${DIM}${s.url}${RESET}`)
@@ -194,7 +225,9 @@ export const renderSources = (sources: { id: string; type: string; name: string;
   console.log()
 }
 
-export const renderGroups = (config: { activeGroups: string[]; sources: { group: string; active?: boolean }[] }): void => {
+// ── Groups list ──
+
+export const renderGroups = (config: { activeGroups: string[]; sources: { group: string; active?: boolean; name: string; type: string }[] }): void => {
   const groups = [...new Set(config.sources.map(s => s.group))]
   if (groups.length === 0) {
     console.log(`\n${DIM}  No groups.${RESET}\n`)
@@ -204,7 +237,9 @@ export const renderGroups = (config: { activeGroups: string[]; sources: { group:
   console.log()
   for (const g of groups) {
     const active = config.activeGroups.includes(g)
-    const icon = active ? `${CYAN}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
+    const sample = config.sources.find(s => s.group === g)!
+    const color = sourceColor(sample.name, sample.type)
+    const icon = active ? `${color}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
     const sources = config.sources.filter(s => s.group === g)
     const activeCount = sources.filter(s => s.active !== false).length
     const label = active ? `${BOLD}${g}${RESET}` : `${GRAY}${g}${RESET}`
