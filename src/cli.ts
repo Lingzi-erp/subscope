@@ -195,14 +195,28 @@ const commands: Record<string, () => Promise<void>> = {
       process.exit(1)
     }
 
-    const token = args[1]
+    let token = args[1]
+
     if (!token) {
-      console.log('\n  To get your auth_token:')
-      console.log('  1. Open x.com in your browser (logged in)')
-      console.log('  2. DevTools (F12) → Application → Cookies → x.com')
-      console.log('  3. Copy the value of "auth_token"')
-      console.log(`\n  Then run: subscope auth x <token>\n`)
-      return
+      // Auto-detect: launch browser, grab cookie
+      console.log('\n  Launching browser to detect X login...\n')
+
+      const { join } = await import('path')
+      const authScript = join(import.meta.dir, 'adapters', 'x-auth.cjs')
+      const proc = Bun.spawn(['node', authScript], {
+        stdout: 'pipe',
+        stderr: 'inherit',
+        timeout: 150_000,
+      })
+      const stdout = await new Response(proc.stdout).text()
+      const exitCode = await proc.exited
+
+      if (exitCode !== 0 || !stdout.trim()) {
+        console.error('  Failed to get auth token. You can also set it manually:')
+        console.error('  subscope auth x <token>\n')
+        process.exit(1)
+      }
+      token = stdout.trim()
     }
 
     const { join } = await import('path')
