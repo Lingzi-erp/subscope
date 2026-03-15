@@ -10,6 +10,10 @@ const hash = (...parts: string[]) =>
 
 const AUTH_FILE = join(homedir(), '.subscope', 'auth.yml')
 const SCRAPER_SCRIPT = join(import.meta.dir, 'x-scraper.cjs')
+const SYNDICATION_URL = 'https://syndication.twitter.com/srv/timeline-profile/screen-name/'
+
+// One browser scrape for all X sources
+let scrapePromise: Promise<Map<string, RawTweet[]>> | null = null
 
 export const twitter: SourceAdapter = {
   type: 'twitter',
@@ -22,38 +26,104 @@ export const twitter: SourceAdapter = {
     const username = extractUsername(source.url)
     if (!username) return []
 
+    // Strategy 1: Playwright (if auth token available)
     const authToken = loadAuthToken()
+    if (authToken) {
+      if (!scrapePromise) {
+        scrapePromise = scrapeAll(authToken)
+      }
+      const cache = await scrapePromise
+      const tweets = cache.get(username.toLowerCase()) ?? []
+      if (tweets.length > 0) {
+        return mergeThreads(tweets, username, source)
+      }
+    }
+
+    // Strategy 2: Syndication fallback
+    const items = await fetchSyndication(username, source)
+    if (items.length > 0) return items
+
+    // Both failed
     if (!authToken) {
       throw new Error('X auth required. Run: subscope auth x <token>')
     }
-
-    return fetchWithPlaywright(username, authToken, source)
+    return []
   },
 }
 
-// ── Playwright via Node subprocess ──
+export const resetTwitterCache = () => { scrapePromise = null }
 
-const fetchWithPlaywright = async (username: string, authToken: string, source: Source): Promise<FeedItem[]> => {
-  const proc = Bun.spawn(['node', SCRAPER_SCRIPT, username, authToken], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-    timeout: 45_000,
-  })
+// ── Playwright batch scrape ──
 
-  const stdout = await new Response(proc.stdout).text()
-  const exitCode = await proc.exited
+const scrapeAll = async (authToken: string): Promise<Map<string, RawTweet[]>> => {
+  try {
+    const configPath = join(homedir(), '.subscope', 'config.yml')
+    const config = parse(readFileSync(configPath, 'utf-8')) as any
+    const usernames = (config.sources ?? [])
+      .filter((s: any) => s.url?.includes('x.com') || s.url?.includes('twitter.com'))
+      .map((s: any) => extractUsername(s.url))
+      .filter(Boolean) as string[]
 
-  if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text()
-    throw new Error(`X scraper failed: ${stderr.slice(0, 100)}`)
+    if (usernames.length === 0) return new Map()
+
+    const proc = Bun.spawn(['node', SCRAPER_SCRIPT, authToken, ...usernames], {
+      stdout: 'pipe',
+      stderr: 'inherit',
+      timeout: 60_000 + usernames.length * 15_000,
+    })
+
+    const stdout = await new Response(proc.stdout).text()
+    const exitCode = await proc.exited
+
+    if (exitCode !== 0 || !stdout.trim()) return new Map()
+
+    const data: Record<string, RawTweet[]> = JSON.parse(stdout)
+    const result = new Map<string, RawTweet[]>()
+    for (const [user, tweets] of Object.entries(data)) {
+      result.set(user.toLowerCase(), tweets)
+    }
+    return result
+  } catch {
+    return new Map()
   }
+}
 
-  const tweets: RawTweet[] = JSON.parse(stdout)
-  if (tweets.length === 0) {
-    throw new Error('X scraper returned 0 tweets — auth token may be expired')
+// ── Syndication fallback ──
+
+const fetchSyndication = async (username: string, source: Source): Promise<FeedItem[]> => {
+  try {
+    const res = await fetch(`${SYNDICATION_URL}${username}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    })
+    if (!res.ok) return []
+
+    const html = await res.text()
+    if (html.includes('Rate limit exceeded')) return []
+
+    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s)
+    if (!match) return []
+
+    const data = JSON.parse(match[1]!)
+    const entries: any[] = data?.props?.pageProps?.timeline?.entries ?? []
+
+    const tweets: RawTweet[] = []
+    for (const entry of entries) {
+      const t = entry?.content?.tweet
+      if (!t?.text || !t?.id_str) continue
+      if (t.retweeted_status_result) continue
+      tweets.push({
+        id: t.id_str,
+        text: t.text,
+        date: t.created_at,
+        replyToId: t.in_reply_to_status_id_str ?? null,
+        convId: t.conversation_id_str ?? t.id_str,
+      })
+    }
+
+    return mergeThreads(tweets, username, source)
+  } catch {
+    return []
   }
-
-  return mergeThreads(tweets, username, source)
 }
 
 // ── Auth ──

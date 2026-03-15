@@ -1,18 +1,21 @@
-// Node-only script — scrapes X profile via Playwright
-// Usage: node x-scraper.cjs <username> <auth_token>
-// Output: JSON array of { id, text, date, replyToId, convId } to stdout
+// Node-only script — scrapes multiple X profiles with ONE browser
+// Usage: node x-scraper.cjs <auth_token> <username1> <username2> ...
+// Output: JSON object { username: [{id, text, date, replyToId, convId}] } to stdout
 
 const { chromium } = require('playwright')
 
-const [,, username, authToken] = process.argv
+const [,, authToken, ...usernames] = process.argv
 
-if (!username || !authToken) {
-  console.error('Usage: node x-scraper.cjs <username> <auth_token>')
+if (!authToken || usernames.length === 0) {
+  console.error('Usage: node x-scraper.cjs <auth_token> <user1> [user2] ...')
   process.exit(1)
 }
 
 async function main() {
-  const browser = await chromium.launch({ headless: true })
+  const browser = await chromium.launch({
+    channel: 'chrome',
+    args: ['--headless=new'],
+  })
   const context = await browser.newContext()
 
   await context.addCookies([{
@@ -25,25 +28,38 @@ async function main() {
     sameSite: 'None',
   }])
 
+  const results = {}
+
+  for (const username of usernames) {
+    try {
+      process.stderr.write(`  scraping @${username}...\n`)
+      results[username] = await scrapePage(context, username)
+    } catch (err) {
+      process.stderr.write(`  @${username} failed: ${err.message}\n`)
+      results[username] = []
+    }
+  }
+
+  await browser.close()
+  process.stdout.write(JSON.stringify(results))
+}
+
+async function scrapePage(context, username) {
   const page = await context.newPage()
+
   await page.goto(`https://x.com/${username}`, {
-    waitUntil: 'domcontentloaded',
+    waitUntil: 'load',
     timeout: 20000,
   })
 
-  await page.waitForSelector('article', { timeout: 10000 }).catch(() => {})
+  await page.waitForSelector('article', { timeout: 15000 }).catch(() => {})
+  await page.waitForTimeout(1000)
 
-  // Scroll to load more tweets
   for (let i = 0; i < 3; i++) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
     await page.waitForTimeout(1500)
   }
 
-  // Extract tweets from DOM
-  // X profile shows threads as consecutive articles.
-  // Between threads there's usually a "Show this thread" link or a gap.
-  // We detect threads by checking if an article has the "thread indicator"
-  // (a vertical line connecting to the next tweet).
   const tweets = await page.evaluate((targetUser) => {
     const articles = document.querySelectorAll('article')
     const results = []
@@ -62,30 +78,19 @@ async function main() {
       const tweetUser = href.split('/')[1]?.toLowerCase() || ''
       if (tweetUser !== targetUser.toLowerCase()) continue
 
-      // Detect if this tweet connects to the next (thread indicator)
-      // X uses a vertical line/connector between thread tweets
-      const hasThreadLine = article.querySelector('[data-testid="Tweet-User-Avatar"] + div') !== null
-        || article.innerHTML.includes('self-stretch')
-
       results.push({
         id: idMatch[1],
         text: textEl.innerText || '',
         date: timeEl ? timeEl.getAttribute('datetime') : '',
-        isPartOfThread: false, // will be set in post-processing
       })
     }
     return results
   }, username)
 
-  await browser.close()
+  await page.close()
 
-  // Post-process: detect threads
-  // On a profile page, threads appear as consecutive tweets from the same user.
-  // The FIRST tweet in a group of consecutive same-user tweets is the root.
-  // Subsequent ones are replies in the thread.
-  // A "gap" (different date by > 1 hour) between consecutive tweets starts a new thread.
+  // Detect threads
   const ONE_HOUR = 3600_000
-
   for (let i = 0; i < tweets.length; i++) {
     tweets[i].replyToId = null
     tweets[i].convId = tweets[i].id
@@ -94,28 +99,18 @@ async function main() {
   for (let i = 1; i < tweets.length; i++) {
     const prev = tweets[i - 1]
     const curr = tweets[i]
-
     if (!prev.date || !curr.date) continue
 
     const gap = Math.abs(new Date(curr.date).getTime() - new Date(prev.date).getTime())
-
-    // Consecutive tweets within 1 hour = same thread
     if (gap < ONE_HOUR) {
-      // Find the thread root by walking back
       let rootIdx = i - 1
-      while (rootIdx > 0 && tweets[rootIdx].replyToId !== null) {
-        rootIdx--
-      }
+      while (rootIdx > 0 && tweets[rootIdx].replyToId !== null) rootIdx--
       curr.replyToId = prev.id
-      curr.convId = tweets[rootIdx].id
-      // Also update all tweets in this thread to share convId
-      for (let j = rootIdx; j <= i; j++) {
-        tweets[j].convId = tweets[rootIdx].id
-      }
+      for (let j = rootIdx; j <= i; j++) tweets[j].convId = tweets[rootIdx].id
     }
   }
 
-  process.stdout.write(JSON.stringify(tweets))
+  return tweets
 }
 
 main().catch(err => {
