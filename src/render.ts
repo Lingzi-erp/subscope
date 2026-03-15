@@ -172,72 +172,96 @@ const formatItemSel = (item: FeedItem, maxWidth: number, selected: boolean, isNe
   return lines
 }
 
-export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources = true): Promise<void> => {
-  if (items.length === 0) {
-    renderFeed(items, olderCount, hasSources)
+export const renderInteractive = (allItems: FeedItem[], olderCount = 0, hasSources = true): Promise<void> => {
+  if (allItems.length === 0) {
+    renderFeed(allItems, olderCount, hasSources)
     return Promise.resolve()
   }
 
-  if (items.length <= 3) {
+  if (allItems.length <= 3) {
     console.log()
     const maxWidth = cols() - PREFIX_LEN
-    for (const item of items) for (const line of formatItem(item, maxWidth)) console.log(line)
+    for (const item of allItems) for (const line of formatItem(item, maxWidth)) console.log(line)
     return Promise.resolve()
   }
 
-  let cursor = 0
+  // State
+  let cursor = 0         // -1 = search box focused, 0+ = item index
+  let search = ''        // current search query
+  let items = allItems   // filtered view
+
   const seen = loadSeen()
-  const newIds = new Set(items.filter(i => !seen.has(i.id)).map(i => i.id))
-  // Mark all as seen
-  for (const item of items) seen.add(item.id)
+  const newIds = new Set(allItems.filter(i => !seen.has(i.id)).map(i => i.id))
+  for (const item of allItems) seen.add(item.id)
   saveSeen(seen)
+
+  const applyFilter = () => {
+    if (!search) { items = allItems; return }
+    const q = search.toLowerCase()
+    items = allItems.filter(i =>
+      i.title.toLowerCase().includes(q) ||
+      (i.summary?.toLowerCase().includes(q)) ||
+      i.sourceName.toLowerCase().includes(q) ||
+      i.url.toLowerCase().includes(q)
+    )
+  }
+
+  const itemHeight = (item: FeedItem) => {
+    const hasSummary = item.summary && item.summary.replace(/<[^>]*>/g, '').trim()
+    return hasSummary ? 5 : 4
+  }
 
   const draw = () => {
     const maxWidth = cols() - PREFIX_LEN
-    const h = rows()
-
-    // Calculate visible window around cursor
-    const itemHeights = items.map(item => {
-      const hasSummary = item.summary && item.summary.replace(/<[^>]*>/g, '').trim()
-      return hasSummary ? 5 : 4  // lines per item
-    })
-
-    // Find scroll offset so cursor is visible
-    let scrollStart = 0
-    let usedRows = 0
-    const available = h - 2 // status bar
-
-    // Sum heights until we reach cursor
-    let cursorTop = 0
-    for (let i = 0; i < cursor; i++) cursorTop += itemHeights[i]!
-
-    // If cursor would be below viewport, scroll down
-    while (cursorTop - scrollStart + itemHeights[cursor]! > available) scrollStart += itemHeights[scrollStart]!
-    // Convert scrollStart from pixels to item index
-    // Actually just use item-based scrolling
-    let startIdx = 0
-    let totalH = 0
-    for (let i = 0; i < items.length; i++) {
-      if (totalH + itemHeights[i]! > available && i <= cursor) {
-        startIdx = i
-        totalH = 0
-      }
-      totalH += itemHeights[i]!
-    }
-    // Ensure cursor is in view
-    if (startIdx > cursor) startIdx = cursor
-
+    const termH = rows()
     const lines: string[] = []
-    for (let i = startIdx; i < items.length; i++) {
-      const itemLines = formatItemSel(items[i]!, maxWidth, i === cursor, newIds.has(items[i]!.id))
-      if (lines.length + itemLines.length > available) break
-      lines.push(...itemLines)
+
+    // Search bar (always at top)
+    const searchFocused = cursor === -1
+    if (searchFocused) {
+      lines.push(`  ${CYAN}\u25b6${RESET} ${DIM}search:${RESET} ${search}\x1b[7m \x1b[27m`)
+    } else if (search) {
+      lines.push(`  ${DIM}search: ${search}${RESET}  ${GRAY}(${items.length} results)${RESET}`)
+    } else {
+      lines.push(`  ${DIM}/ search${RESET}`)
+    }
+    lines.push('')
+
+    const headerH = 2
+    const available = termH - headerH - 1 // -1 for status bar
+
+    if (items.length === 0) {
+      lines.push(`  ${DIM}No results for "${search}"${RESET}`)
+    } else {
+      const effCursor = Math.max(0, cursor)
+
+      // Find scroll start
+      let startIdx = 0
+      let totalH = 0
+      for (let i = 0; i < items.length; i++) {
+        const ih = itemHeight(items[i]!)
+        if (totalH + ih > available && i <= effCursor) {
+          startIdx = i
+          totalH = 0
+        }
+        totalH += ih
+      }
+      if (startIdx > effCursor) startIdx = effCursor
+
+      for (let i = startIdx; i < items.length; i++) {
+        const itemLines = formatItemSel(items[i]!, maxWidth, i === effCursor && cursor >= 0, newIds.has(items[i]!.id))
+        if (lines.length - headerH + itemLines.length > available) break
+        lines.push(...itemLines)
+      }
     }
 
-    while (lines.length < available) lines.push('')
+    while (lines.length < termH - 1) lines.push('')
 
-    const pos = `${cursor + 1}/${items.length}`
-    const hint = '\u2191\u2193 browse  enter open  q quit'
+    // Status bar
+    const pos = cursor >= 0 ? `${cursor + 1}/${items.length}` : `${items.length} items`
+    const hint = cursor === -1
+      ? 'type to search  \u2193 browse  q quit'
+      : '\u2191\u2193 browse  / search  enter open  q quit'
     const gap = Math.max(1, cols() - pos.length - hint.length - 4)
     lines.push(`${BG_BAR}${WHITE} ${pos}${' '.repeat(gap)}${DIM}${hint}${RESET}`)
 
@@ -266,18 +290,36 @@ export const renderInteractive = (items: FeedItem[], olderCount = 0, hasSources 
 
     const onKey = (key: string) => {
       if (key === 'q' || key === '\x03') { cleanup(); return }
+
+      // Search box focused
+      if (cursor === -1) {
+        if (key === '\x1b[B') { // down: enter browse mode
+          cursor = items.length > 0 ? 0 : -1; draw(); return
+        }
+        if (key === '\r') { // enter: apply search, jump to results
+          applyFilter(); cursor = items.length > 0 ? 0 : -1; draw(); return
+        }
+        if (key === '\x7f' || key === '\b') {
+          search = search.slice(0, -1); applyFilter(); draw(); return
+        }
+        if (key.length === 1 && key.charCodeAt(0) >= 32) {
+          search += key; applyFilter(); draw(); return
+        }
+        return
+      }
+
+      // Browse mode
       if (key === '\x1b[A' || key === 'k') {
         if (cursor > 0) { cursor--; newIds.delete(items[cursor]!.id); draw() }
+        else { cursor = -1; draw() } // up past first item = search box
         return
       }
       if (key === '\x1b[B' || key === 'j') {
         if (cursor < items.length - 1) { cursor++; newIds.delete(items[cursor]!.id); draw() }
         return
       }
-      if (key === '\r') {
-        openUrl(items[cursor]!.url)
-        return
-      }
+      if (key === '/') { cursor = -1; draw(); return } // jump to search
+      if (key === '\r') { openUrl(items[cursor]!.url); return }
     }
 
     process.stdin.on('data', onKey)
