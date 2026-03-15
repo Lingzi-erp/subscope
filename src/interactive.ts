@@ -143,8 +143,8 @@ const render = (path: string, rowList: Row[], cursor: number, dirty: boolean, in
 
   // Status bar
   const nav = path
-    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  n new  d delete  enter save'
-    : '\u2191\u2193 move  space toggle  \u2192 open  n new  d delete  enter save  q quit'
+    ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  n new  e rename  d del  enter save'
+    : '\u2191\u2193 move  space toggle  \u2192 open  n new  e rename  d del  enter save  q quit'
   const mark = dirty ? `${CYAN}*${RESET} ` : '  '
   const pad = Math.max(0, w - nav.length - 4)
   out.push(`${BG_BAR}${WHITE} ${mark}${DIM}${nav}${' '.repeat(pad)}${RESET}`)
@@ -215,7 +215,10 @@ export const interactiveConfig = (): Promise<void> => {
 
   const draw = () => {
     rowList = buildRows(cfg, current().path)
-    render(current().path, rowList, current().cursor, dirty, inputMode ? `New folder: ${inputBuffer}\u2588` : '')
+    const prompt = inputMode === 'rename' ? `Rename: ${inputBuffer}\u2588`
+      : inputMode === 'new' ? `New folder: ${inputBuffer}\u2588`
+      : ''
+    render(current().path, rowList, current().cursor, dirty, prompt)
   }
 
   draw()
@@ -240,11 +243,23 @@ export const interactiveConfig = (): Promise<void> => {
       if (inputMode) {
         if (key === '\r') {
           if (inputBuffer.trim()) {
-            const newPath = current().path
-              ? `${current().path}/${inputBuffer.trim()}`
-              : inputBuffer.trim()
-            if (!cfg.folders.includes(newPath)) cfg.folders.push(newPath)
-            if (!cfg.activeGroups.includes(newPath)) cfg.activeGroups.push(newPath)
+            const newName = inputBuffer.trim()
+            const newPath = current().path ? `${current().path}/${newName}` : newName
+
+            if (inputMode === 'rename') {
+              // Rename: update all paths that start with old path
+              const row = rowList[current().cursor]
+              const oldPath = row?.key!
+              const rename = (p: string) =>
+                p === oldPath ? newPath : p.startsWith(oldPath + '/') ? newPath + p.slice(oldPath.length) : p
+              cfg.folders = cfg.folders.map(rename)
+              cfg.activeGroups = cfg.activeGroups.map(rename)
+              cfg.sources.forEach(s => { s.group = rename(s.group) })
+            } else {
+              // New folder
+              if (!cfg.folders.includes(newPath)) cfg.folders.push(newPath)
+              if (!cfg.activeGroups.includes(newPath)) cfg.activeGroups.push(newPath)
+            }
             dirty = true
           }
           inputMode = ''
@@ -295,6 +310,13 @@ export const interactiveConfig = (): Promise<void> => {
         inputMode = 'new'
         inputBuffer = ''
         draw()
+      } else if (key === 'e') {
+        const row = rowList[current().cursor]
+        if (row?.kind === 'folder') {
+          inputMode = 'rename'
+          inputBuffer = row.key!.split('/').pop()!
+          draw()
+        }
       } else if (key === 'd') {
         const row = rowList[current().cursor]
         if (row?.kind === 'folder') {
