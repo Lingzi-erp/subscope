@@ -49,98 +49,37 @@ const fetchSyndication = async (username: string, source: Source): Promise<FeedI
     const res = await fetch(`${SYNDICATION_URL}${username}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      if (res.status === 429) throw new Error('rate limited by X syndication API')
+      return []
+    }
 
     const html = await res.text()
+    if (html.includes('Rate limit exceeded')) throw new Error('rate limited by X syndication API')
+
     const match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s)
     if (!match) return []
 
     const data = JSON.parse(match[1]!)
     const entries: any[] = data?.props?.pageProps?.timeline?.entries ?? []
 
-    // Collect tweets
-    type Tweet = { id: string; text: string; date: string; replyTo: string | null; convId: string }
-    const tweetsById = new Map<string, Tweet>()
+    const tweets: RawTweet[] = []
     for (const entry of entries) {
       const t = entry?.content?.tweet
       if (!t?.text || !t?.id_str) continue
       if (t.retweeted_status_result) continue
-      tweetsById.set(t.id_str, {
+      tweets.push({
         id: t.id_str,
         text: t.text,
         date: t.created_at,
-        replyTo: t.in_reply_to_status_id_str ?? null,
+        replyToId: t.in_reply_to_status_id_str ?? null,
         convId: t.conversation_id_str ?? t.id_str,
       })
     }
 
-    // Build threads: use conversation_id when available,
-    // fall back to reply chain walking
-    const threadMap = new Map<string, Tweet[]>()
-    const assigned = new Set<string>()
-
-    for (const tweet of tweetsById.values()) {
-      if (assigned.has(tweet.id)) continue
-
-      // Find thread root by walking reply chain upward
-      let rootId = tweet.id
-      let current = tweet
-      while (current.replyTo && tweetsById.has(current.replyTo)) {
-        rootId = current.replyTo
-        current = tweetsById.get(current.replyTo)!
-      }
-
-      // Also use conversation_id if it points to a known tweet
-      if (tweetsById.has(tweet.convId)) {
-        rootId = tweet.convId
-      }
-
-      const group = threadMap.get(rootId) ?? []
-      if (!assigned.has(tweet.id)) {
-        group.push(tweet)
-        assigned.add(tweet.id)
-      }
-      threadMap.set(rootId, group)
-    }
-
-    // Also sweep: attach any tweet whose replyTo is in an existing thread
-    for (const tweet of tweetsById.values()) {
-      if (assigned.has(tweet.id)) continue
-      if (tweet.replyTo && assigned.has(tweet.replyTo)) {
-        // Find which thread the parent belongs to
-        for (const [rootId, group] of threadMap) {
-          if (group.some(t => t.id === tweet.replyTo)) {
-            group.push(tweet)
-            assigned.add(tweet.id)
-            break
-          }
-        }
-      }
-    }
-
-    const items: FeedItem[] = []
-    for (const [rootId, thread] of threadMap) {
-      thread.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-
-      const root = thread[0]!
-      const title = cleanTweetText(root.text)
-      const replies = thread.slice(1).map(t => cleanTweetText(t.text)).filter(Boolean)
-      const summary = replies.length > 0 ? replies.join(' \u00b7 ') : undefined
-
-      items.push({
-        id: hash(source.id, rootId),
-        sourceId: source.id,
-        sourceType: 'twitter',
-        sourceName: source.name,
-        title,
-        url: `https://x.com/${username}/status/${root.id}`,
-        summary: summary?.slice(0, 300),
-        publishedAt: new Date(root.date).toISOString(),
-      })
-    }
-
-    return items.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-  } catch {
+    return mergeThreads(tweets, username, source)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('rate limit')) throw err
     return []
   }
 }
@@ -160,17 +99,9 @@ const fetchWithPlaywright = async (username: string, authToken: string, source: 
 
     if (exitCode !== 0) return []
 
-    const tweets: { id: string; text: string; date: string }[] = JSON.parse(stdout)
+    const tweets: { id: string; text: string; date: string; replyToId?: string | null; convId?: string }[] = JSON.parse(stdout)
 
-    return tweets.map(t => ({
-      id: hash(source.id, t.id),
-      sourceId: source.id,
-      sourceType: 'twitter' as const,
-      sourceName: source.name,
-      title: cleanTweetText(t.text),
-      url: `https://x.com/${username}/status/${t.id}`,
-      publishedAt: t.date ? new Date(t.date).toISOString() : new Date().toISOString(),
-    })).sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    return mergeThreads(tweets, username, source)
   } catch {
     return []
   }
@@ -186,6 +117,75 @@ const loadAuthToken = (): string | null => {
   } catch {
     return null
   }
+}
+
+// ── Shared thread merging ──
+
+type RawTweet = { id: string; text: string; date: string; replyToId?: string | null; convId?: string }
+
+const mergeThreads = (tweets: RawTweet[], username: string, source: Source): FeedItem[] => {
+  const byId = new Map<string, RawTweet>()
+  for (const t of tweets) byId.set(t.id, t)
+
+  const threadMap = new Map<string, RawTweet[]>()
+  const assigned = new Set<string>()
+
+  for (const tweet of byId.values()) {
+    if (assigned.has(tweet.id)) continue
+
+    // Walk reply chain up to find root
+    let rootId = tweet.id
+    let current = tweet
+    while (current.replyToId && byId.has(current.replyToId)) {
+      rootId = current.replyToId
+      current = byId.get(current.replyToId)!
+    }
+    if (tweet.convId && byId.has(tweet.convId)) rootId = tweet.convId
+
+    const group = threadMap.get(rootId) ?? []
+    if (!assigned.has(tweet.id)) {
+      group.push(tweet)
+      assigned.add(tweet.id)
+    }
+    threadMap.set(rootId, group)
+  }
+
+  // Sweep: orphan replies
+  for (const tweet of byId.values()) {
+    if (assigned.has(tweet.id)) continue
+    if (tweet.replyToId && assigned.has(tweet.replyToId)) {
+      for (const [, group] of threadMap) {
+        if (group.some(t => t.id === tweet.replyToId)) {
+          group.push(tweet)
+          assigned.add(tweet.id)
+          break
+        }
+      }
+    }
+  }
+
+  const items: FeedItem[] = []
+  for (const [rootId, thread] of threadMap) {
+    thread.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
+    const root = thread[0]!
+    const title = cleanTweetText(root.text)
+    const replies = thread.slice(1).map(t => cleanTweetText(t.text)).filter(Boolean)
+    const summary = replies.length > 0 ? replies.join(' \u00b7 ') : undefined
+
+    items.push({
+      id: hash(source.id, rootId),
+      sourceId: source.id,
+      sourceType: 'twitter',
+      sourceName: source.name,
+      title,
+      url: `https://x.com/${username}/status/${root.id}`,
+      summary: summary?.slice(0, 300),
+      publishedAt: root.date ? new Date(root.date).toISOString() : new Date().toISOString(),
+    })
+  }
+
+  return items.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
 }
 
 // ── Helpers ──
