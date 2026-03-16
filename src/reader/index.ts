@@ -171,7 +171,7 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     // Media placeholders
     if (tag === 'img') {
       const alt = $(node).attr('alt')?.trim()
-      if (alt && alt.length > 4) blocks.push(`\n[image: ${alt}]\n`)
+      blocks.push(alt && alt.length > 4 ? `\n[image: ${alt}]\n` : '\n[image]\n')
       return
     }
     if (tag === 'video') { blocks.push('\n[video]\n'); return }
