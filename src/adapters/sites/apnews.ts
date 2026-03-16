@@ -26,11 +26,14 @@ export const fetchAPNews = async (source: Source): Promise<FeedItem[]> => {
     items.push(item(source, url, title))
   })
 
-  // Enrich with timestamps from article meta (fetch first few)
+  // Enrich with timestamps from article meta (concurrent, capped at 20 with timeout)
   const enriched = await Promise.allSettled(
-    items.slice(0, 30).map(async (fi) => {
+    items.slice(0, 20).map(async (fi) => {
       try {
-        const res = await fetch(fi.url, { headers: { 'User-Agent': UA } })
+        const res = await fetch(fi.url, {
+          headers: { 'User-Agent': UA },
+          signal: AbortSignal.timeout(5000),
+        })
         if (!res.ok) return fi
         const html = await res.text()
         const $a = cheerio.load(html)
