@@ -1,0 +1,102 @@
+import type { SiteRule } from './types.ts'
+
+export const econRules: SiteRule[] = [
+  {
+    test: u => u.includes('bea.gov'),
+    selector: '.field--name-body.field--item',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*\|.*$/, '').trim(),
+    pick: $ => $('.field--name-body.field--item').first(),
+  },
+  {
+    test: u => u.includes('pbc.gov.cn'),
+    selector: '#zoom',
+    title: '.zw_title, h1, title',
+  },
+  {
+    test: u => u.includes('stats.gov.cn'),
+    selector: '.txt-content',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*[-–—]\s*国家统计局.*$/, '').trim(),
+  },
+  {
+    test: u => u.includes('federalreserve.gov'),
+    selector: '#article .col-xs-12.col-sm-8.col-md-8',
+    title: '#article h3.title, h3.title',
+    pick: $ => {
+      const divs = $('#article .col-xs-12.col-sm-8.col-md-8')
+      return divs.length > 1 ? divs.eq(1) : divs
+    },
+  },
+  {
+    test: u => u.includes('sec.gov/Archives'),
+    selector: 'body',
+    title: 'title',
+    pick: $ => {
+      const $body = $('body').clone()
+      $body.find('[style*="display:none"], [style*="display: none"], ix\\:hidden, .xbrl').remove()
+      return $body
+    },
+  },
+  {
+    test: u => u.includes('bls.gov'),
+    selector: '#bodytext, pre, .centerDiv',
+    headers: {
+      'Sec-Fetch-Dest': 'document', 'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none', 'Sec-Fetch-User': '?1',
+    },
+    title: 'h2, h1, title',
+  },
+  {
+    test: u => u.includes('ecb.europa.eu'),
+    selector: 'main .section',
+    title: 'main .title h1, title',
+  },
+  {
+    test: u => u.includes('home.treasury.gov'),
+    selector: 'article, .node__content',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*\|\s*U\.S\. Department.*$/, '').trim(),
+    pick: $ => {
+      const $article = $('article .field--name-body .field__item')
+      if ($article.length && $article.text().trim().length > 100) return $article
+      const desc = $('meta[property="og:description"]').attr('content')
+      if (desc) {
+        const $div = $('<div>')
+        desc.split(/\s{2,}/).forEach(p => $div.append(`<p>${p.trim()}</p>`))
+        return $div
+      }
+      return $('body')
+    },
+  },
+  {
+    test: u => u.includes('imf.org'),
+    selector: 'article .column-padding, article',
+    title: 'h1, title',
+    cleanTitle: t => t.replace(/\s*[-–]\s*IMF$/, '').trim(),
+  },
+  {
+    test: u => u.includes('csrc.gov.cn'),
+    selector: '.detail-news',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*[-–—_]\s*中国证券监督管理委员会.*$/, '').trim(),
+  },
+  {
+    test: u => u.includes('mof.gov.cn'),
+    selector: '.xwfb_content, .TRS_Editor, .pages_content',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*[-–—_]\s*中华人民共和国财政部.*$/, '').trim(),
+  },
+  {
+    test: u => u.includes('safe.gov.cn'),
+    selector: '.detail_content, .Custom_UnionStyle',
+    title: 'title',
+    cleanTitle: t => t.replace(/\s*[_\-–—]\s*(国家外汇管理局|数据解读|要闻发布|政策法规解读|公开招考|通知公告).*$/, '').trim(),
+  },
+  {
+    test: u => u.includes('nfra.gov.cn'),
+    selector: '.Section0, .content, article',
+    title: 'h1, .detail-title, title',
+    cleanTitle: t => t.replace(/\s*[-–—_]\s*国家金融监督管理总局.*$/, '').trim(),
+  },
+]
