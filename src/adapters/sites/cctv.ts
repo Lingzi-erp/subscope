@@ -11,8 +11,8 @@ export const fetchCCTV = async (source: Source): Promise<FeedItem[]> => {
     const res = await fetch(source.url, { headers: { 'User-Agent': UA }, ...TLS(source.url) } as any)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     html = await res.text()
-    // JS template check: if no real article links, need Playwright
-    if (!/news\.cctv\.com\/20\d{2}\//.test(html)) throw new Error('js shell')
+    // JS template: static HTML only has 1-2 slider items, list is AJAX-loaded
+    if ((html.match(/news\.cctv\.com\/20\d{2}\//g) || []).length < 5) throw new Error('js shell')
   } catch {
     html = fetchWithBrowser(source.url, 'networkidle')
   }

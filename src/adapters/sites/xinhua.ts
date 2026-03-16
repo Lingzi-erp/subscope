@@ -6,23 +6,33 @@ import type { Source, FeedItem } from '../../types.ts'
 const BASE = 'http://www.news.cn'
 
 export const fetchXinhua = async (source: Source): Promise<FeedItem[]> => {
-  // Try both HTTP and HTTPS
-  let html: string
-  const urls = [source.url, source.url.replace('http://', 'https://')]
-  let fetched = false
+  // Try multiple URL variants — news.cn access is flaky
+  let html = ''
+  const path = new URL(source.url).pathname
+  const variants = [
+    `http://www.news.cn${path}`,
+    `https://www.news.cn${path}`,
+    `http://news.cn${path}`,
+    `https://news.cn${path}`,
+  ]
 
-  for (const url of urls) {
+  for (const url of variants) {
     try {
       const res = await fetch(url, { headers: { 'User-Agent': UA }, ...TLS(url) } as any)
       if (!res.ok) continue
-      html = await res.text()
-      if (html.length > 2000 && /news\.cn\//.test(html)) { fetched = true; break }
+      const text = await res.text()
+      if (text.length > 2000 && /news\.cn\//.test(text)) { html = text; break }
     } catch {}
   }
 
-  if (!fetched) {
-    html = fetchWithBrowser(source.url, 'networkidle')
+  if (!html) {
+    // Last resort: Playwright with networkidle
+    for (const url of variants) {
+      try { html = fetchWithBrowser(url, 'networkidle'); break } catch {}
+    }
   }
+
+  if (!html) return []
 
   const $ = cheerio.load(html!)
   const items: FeedItem[] = []
