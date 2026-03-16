@@ -59,6 +59,20 @@ export const aiRules: SiteRule[] = [
     title: 'h1',
     cleanTitle: t => t.replace(/\s*[—–-]\s*Google DeepMind$/, '').trim(),
     feedUrl: 'https://deepmind.google/blog/rss.xml',
+    pick: $ => {
+      const $main = $('main').clone()
+      // Remove "Related Posts" section and any trailing promo sections
+      $main.find('section').each((_, el) => {
+        if (/related\s+posts/i.test($(el).text())) $(el).remove()
+      })
+      // Remove the last section if it's a promo (no substantive paragraphs)
+      const sections = $main.find('main > section, section').toArray()
+      if (sections.length > 0) {
+        const last = sections[sections.length - 1]
+        if (last && $(last).find('p').length === 0) $(last).remove()
+      }
+      return $main
+    },
   },
   // ── Other ──
   {
