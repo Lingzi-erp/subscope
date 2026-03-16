@@ -40,10 +40,10 @@ export const createStore = (dbPath = DB_PATH) => {
 
   return {
     save(items: FeedItem[]): number {
-      const before = (db.prepare('SELECT COUNT(*) as n FROM items').get() as { n: number }).n
+      let added = 0
       const tx = db.transaction(() => {
         for (const item of items) {
-          insertStmt.run({
+          const r = insertStmt.run({
             $id: item.id,
             $sourceId: item.sourceId,
             $sourceType: item.sourceType,
@@ -53,11 +53,11 @@ export const createStore = (dbPath = DB_PATH) => {
             $summary: item.summary ?? null,
             $publishedAt: item.publishedAt,
           })
+          added += (r as any).changes ?? 0
         }
       })
       tx()
-      const after = (db.prepare('SELECT COUNT(*) as n FROM items').get() as { n: number }).n
-      return after - before
+      return added
     },
 
     query(opts: QueryOpts = {}): FeedItem[] {

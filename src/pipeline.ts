@@ -35,8 +35,14 @@ export const fetchAll = async (opts?: {
   const results: FetchResult[] = []
   let newItems = 0
 
-  // 12 concurrent workers — queue-based semaphore avoids DNS/TLS congestion
-  const CONCURRENCY = 12
+  // Pre-warm DNS cache — fire-and-forget prefetch for all unique hostnames
+  const seen = new Set<string>()
+  for (const s of sources) {
+    try { const h = new URL(s.url).hostname; if (!seen.has(h)) { seen.add(h); Bun.dns.prefetch(h) } } catch {}
+  }
+
+  // 20 concurrent workers — queue-based semaphore balances throughput vs DNS/TLS congestion
+  const CONCURRENCY = 20
   const queue = [...sources]
   const workers: Promise<void>[] = []
 
@@ -47,7 +53,7 @@ export const fetchAll = async (opts?: {
       const t0 = Date.now()
       let result: FetchResult
       try {
-        const items = await retry(() => adapter.fetch(source), 3, 500)
+        const items = await retry(() => withTimeout(adapter.fetch(source), 15_000), 2, 300)
         const added = store.save(items)
         newItems += added
         result = { name: source.name, count: items.length, added, ms: Date.now() - t0 }
@@ -66,6 +72,9 @@ export const fetchAll = async (opts?: {
   store.close()
   return { newItems, results }
 }
+
+const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout ${ms}ms`)), ms))])
 
 const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000
 
