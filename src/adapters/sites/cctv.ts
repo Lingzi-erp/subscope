@@ -1,50 +1,31 @@
-import * as cheerio from 'cheerio'
 import { item, sortDesc, UA, TLS } from '../../lib.ts'
-import { fetchWithBrowser } from '../../browser.ts'
 import type { Source, FeedItem } from '../../types.ts'
 
-const BASE = 'https://news.cctv.com'
+// CCTV JSONP data interface — discovered from inline JS on news.cctv.com
+const JSONP_BASE = 'https://news.cctv.com/2019/07/gaiban/cmsdatainterface/page'
+
+interface CCTVItem {
+  title: string
+  url: string
+  focus_date: string
+  brief?: string
+}
 
 export const fetchCCTV = async (source: Source): Promise<FeedItem[]> => {
-  let html: string
-  try {
-    const res = await fetch(source.url, { headers: { 'User-Agent': UA }, ...TLS(source.url) } as any)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    html = await res.text()
-    // Static HTML has only 1-2 slider articles; the list is AJAX-loaded
-    const realArticles = new Set(html.match(/https?:\/\/news\.cctv\.com\/20\d{2}\/\d{2}\/\d{2}\/ARTI\w+\.shtml/g) || [])
-    if (realArticles.size < 10) throw new Error('js shell')
-  } catch {
-    html = fetchWithBrowser(source.url, 'networkidle')
-  }
+  // Extract channel from URL: news.cctv.com/world/ → world, news.cctv.com/china/ → china
+  const channel = new URL(source.url).pathname.replace(/\//g, '') || 'world'
+  const jsonpUrl = `${JSONP_BASE}/${channel}_1.jsonp`
 
-  const $ = cheerio.load(html)
-  const items: FeedItem[] = []
-  const seen = new Set<string>()
+  const res = await fetch(jsonpUrl, { headers: { 'User-Agent': UA }, ...TLS(jsonpUrl) } as any)
+  if (!res.ok) throw new Error(`CCTV: ${res.status}`)
 
-  $('a[href*="news.cctv.com/20"]').each((_, el) => {
-    const $a = $(el)
-    const href = $a.attr('href')
-    if (!href || !href.includes('.shtml')) return
+  // JSONP response: callback({data:{list:[...]}})
+  const text = await res.text()
+  const jsonStr = text.replace(/^[^(]*\(/, '').replace(/\);?\s*$/, '')
+  const json = JSON.parse(jsonStr) as { data: { list: CCTVItem[] } }
 
-    const title = $a.closest('h3').text().trim()
-      || $a.find('h3').text().trim()
-      || $a.text().trim()
-    if (!title || title.length < 4 || title.length > 200) return
-
-    const url = href.startsWith('http') ? href : `${BASE}${href}`
-    if (seen.has(url)) return
-    seen.add(url)
-
-    const dateMatch = url.match(/\/(\d{4})\/(\d{2})\/(\d{2})\//)
-    const publishedAt = dateMatch
-      ? new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T00:00:00+08:00`).toISOString()
-      : undefined
-
-    const summary = $a.closest('div').find('p').first().text().trim().slice(0, 200) || undefined
-
-    items.push(item(source, url, title, { summary, publishedAt }))
-  })
-
-  return sortDesc(items)
+  return sortDesc(json.data.list.map(n => item(source, n.url, n.title, {
+    summary: n.brief?.slice(0, 200),
+    publishedAt: n.focus_date ? new Date(n.focus_date + '+08:00').toISOString() : undefined,
+  })))
 }
