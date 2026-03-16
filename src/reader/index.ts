@@ -21,6 +21,16 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     } catch {}
   }
 
+  // EIA: Bun TLS handshake takes 10s to eia.gov; curl_cffi is instant
+  if (url.includes('eia.gov/todayinenergy')) {
+    try {
+      const $ = cheerio.load(fetchWithCffi(url))
+      const title = findFirst($, '.tie-article h2, title')?.text || $('title').text().trim()
+      const $body = $('.tie-article').first()
+      if ($body.length) return { title: title.replace(/\s*[-–—]\s*(U\.S\. Energy|Today in Energy|EIA).*$/, '').trim(), text: extractText($body, $) }
+    } catch {}
+  }
+
   // EU Presscorner: Angular SPA, use JSON API directly
   if (url.includes('ec.europa.eu/commission/presscorner/detail')) {
     const match = url.match(/detail\/(\w+)\/([A-Z]+_\d+_?\d*)/)
@@ -75,7 +85,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     if (html.includes('{{data.') && html.includes('ng-controller')) {
       html = fetchWithBrowser(url, 'networkidle')
     } else if (html.length > 10000 && !/<p[\s>]/i.test(html)) {
-      html = fetchWithBrowser(url)
+      try { html = fetchWithCffi(url) } catch { html = fetchWithBrowser(url) }
     }
   } catch {
     // Fallback 1: RSS feed content
@@ -83,17 +93,21 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
       const rss = await readFromFeed(url, site.feedUrl).catch(() => null)
       if (rss) return rss
     }
-    // Fallback 2: curl with minimal UA (bypasses Azure WAF that blocks Chrome UA)
+    // Fallback 2: curl_cffi with Safari TLS impersonation
     html = ''
-    try {
-      const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', url, '-A', 'Mozilla/5.0'],
-        { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
-      if (r.exitCode === 0) {
-        const t = new TextDecoder().decode(r.stdout)
-        if (t.length > 1000 && !t.includes('403 Forbidden')) html = t
-      }
-    } catch {}
-    // Fallback 3: Playwright
+    try { html = fetchWithCffi(url) } catch {}
+    // Fallback 3: curl with minimal UA
+    if (!html) {
+      try {
+        const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', url, '-A', 'Mozilla/5.0'],
+          { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
+        if (r.exitCode === 0) {
+          const t = new TextDecoder().decode(r.stdout)
+          if (t.length > 1000 && !t.includes('403 Forbidden')) html = t
+        }
+      } catch {}
+    }
+    // Fallback 4: Playwright
     if (!html) html = fetchWithBrowser(url)
   }
 

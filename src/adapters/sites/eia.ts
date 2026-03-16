@@ -1,13 +1,11 @@
 import * as cheerio from 'cheerio'
-import { item, sortDesc, UA, TLS } from '../../lib.ts'
+import { item, sortDesc, fetchWithCffi } from '../../lib.ts'
 import type { Source, FeedItem } from '../../types.ts'
 
 const BASE = 'https://www.eia.gov/todayinenergy/'
 
 export const fetchEIA = async (source: Source): Promise<FeedItem[]> => {
-  const res = await fetch(source.url, { headers: { 'User-Agent': UA }, ...TLS(source.url) } as any)
-  if (!res.ok) throw new Error(`EIA: ${res.status}`)
-  const $ = cheerio.load(await res.text())
+  const $ = cheerio.load(fetchWithCffi(source.url))
   const items: FeedItem[] = []
 
   $('.tie-article').each((_, el) => {
