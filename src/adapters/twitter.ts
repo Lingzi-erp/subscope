@@ -1,10 +1,11 @@
 import { join } from 'path'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { parse } from 'yaml'
 import { hash, item, sortDesc, DIR } from '../lib.ts'
 import type { Source, FeedItem, SourceAdapter } from '../types.ts'
 
 const AUTH_FILE = join(DIR, 'auth.yml')
+const UID_CACHE_FILE = join(DIR, 'x-uid-cache.json')
 
 // X web app's public bearer token (baked into their JS, never changes)
 const BEARER = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
@@ -47,13 +48,16 @@ export const twitter: SourceAdapter = {
   },
 
   async fetch(source: Source): Promise<FeedItem[]> {
-    // Extract handle: "x.com/AnthropicAI" or "x.com/@AnthropicAI" → "AnthropicAI"
     const username = source.url.match(/(?:x\.com|twitter\.com)\/?@?([\w]+)/)?.[1]
     if (!username) return []
 
     const session = await getSession()
-    const userId = await resolveUserId(session, username)
-    if (!userId) throw new Error(`X: user "${username}" not found`)
+    let userId = getCachedUid(username)
+    if (!userId) {
+      userId = await resolveUserId(session, username)
+      if (!userId) throw new Error(`X: user "${username}" not found`)
+      cacheUid(username, userId)
+    }
 
     return mergeThreads(await fetchUserTweets(session, userId), username, source)
   },
@@ -85,6 +89,31 @@ const getSession = () => {
   })()
 
   return sessionPromise
+}
+
+// ── User ID cache (IDs are permanent, never change) ──
+
+let uidCache: Record<string, string> | null = null
+
+const loadUidCache = (): Record<string, string> => {
+  if (uidCache) return uidCache
+  try {
+    if (existsSync(UID_CACHE_FILE)) {
+      uidCache = JSON.parse(readFileSync(UID_CACHE_FILE, 'utf-8'))
+      return uidCache!
+    }
+  } catch {}
+  uidCache = {}
+  return uidCache
+}
+
+const getCachedUid = (username: string): string | null =>
+  loadUidCache()[username.toLowerCase()] ?? null
+
+const cacheUid = (username: string, userId: string) => {
+  const cache = loadUidCache()
+  cache[username.toLowerCase()] = userId
+  try { writeFileSync(UID_CACHE_FILE, JSON.stringify(cache)) } catch {}
 }
 
 const apiHeaders = (s: { ct0: string; authToken: string }) => ({
