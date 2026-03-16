@@ -96,7 +96,7 @@ subscope mode <name>              set default mode
 ```
 
 Built-in modes:
-- `formal` -- source type `website` (blogs, docs, changelogs, support)
+- `formal` -- source type `website` in `ai/*` + `photonics/*` groups (blogs, docs, changelogs, support)
 - `quick` -- source types `youtube`, `twitter`
 - `eco` -- group prefix `econ` (Fed, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA)
 

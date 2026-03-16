@@ -20,7 +20,7 @@ export interface Config {
 }
 
 const DEFAULT_MODES: Record<string, ModeConfig> = {
-  formal: { types: ['website'] },
+  formal: { types: ['website'], groups: ['ai', 'photonics'] },
   quick: { types: ['youtube', 'twitter'] },
   eco: { groups: ['econ'] },
 }
@@ -66,13 +66,21 @@ export const load = (): Config => {
   }
   const folders = [...allPaths].sort()
   const defaultMode: ModeName = raw?.defaultMode ?? 'formal'
-  const modes: Record<string, ModeConfig> = raw?.modes ?? DEFAULT_MODES
+  // Built-in modes from code, custom modes from config
+  const customModes = (raw?.modes ?? {}) as Record<string, ModeConfig>
+  const modes: Record<string, ModeConfig> = { ...DEFAULT_MODES }
+  for (const [name, cfg] of Object.entries(customModes))
+    if (!(name in DEFAULT_MODES)) modes[name] = cfg
   return { activeGroups, folders, defaultMode, modes, sources }
 }
 
 export const save = (config: Config): void => {
   ensureDir()
-  writeFileSync(CONFIG_FILE, stringify(config))
+  // Strip built-in modes — they always come from code
+  const customModes: Record<string, ModeConfig> = {}
+  for (const [name, cfg] of Object.entries(config.modes))
+    if (!(name in DEFAULT_MODES)) customModes[name] = cfg
+  writeFileSync(CONFIG_FILE, stringify({ ...config, modes: Object.keys(customModes).length ? customModes : undefined }))
 }
 
 export const addSource = (config: Config, source: Source): Config => {

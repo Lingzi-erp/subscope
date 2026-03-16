@@ -34,7 +34,7 @@ subscope                     # interactive browser with search
 ```
 subscope                     # browse items (up/down, enter to open, / to search, g for PDF)
 subscope quick               # social media only (X + YouTube)
-subscope formal              # official sources only (blogs, docs, support)
+subscope formal              # AI + photonics websites (blogs, docs, support)
 subscope eco                 # economics & finance only (13 sources: Fed, ECB, PBOC, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA)
 subscope --all               # no time filter
 subscope -n 10               # latest 10

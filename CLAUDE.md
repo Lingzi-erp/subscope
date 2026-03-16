@@ -78,7 +78,7 @@ Website adapter detects RSS/Atom by content-type or XML declaration. Handles `pu
 Path-based strings: `ai/anthropic`, `photonics`. Filtering with `-g ai` matches prefix. `activeGroups` list determines what shows in default view. `folders` list persists empty folders independently of sources.
 
 ### Modes
-`formal` = website sources. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). Modes can filter by `types` (source type) and/or `groups` (group prefix). `-g` flag bypasses mode filtering. Custom modes configurable in YAML.
+`formal` = website sources in `ai/*` + `photonics/*`. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). Modes filter by `types` (source type) AND/OR `groups` (group prefix) — both conditions must pass. `-g` flag bypasses mode filtering. Custom modes configurable in YAML.
 
 ### Interactive browser
 Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. Search box at top (cursor = -1). NEW badges tracked via `seen.json`. PDF download via URL pattern matching (Nature `.pdf` suffix, arXiv `/pdf/` path).
