@@ -6,14 +6,16 @@
 subscope                          interactive browser (default: formal mode, last 14 days)
 subscope quick                    social media only (X + YouTube)
 subscope formal                   official sources only (blogs, docs, support)
-subscope eco                      economics & finance only (13 econ/* sources)
+subscope eco                      economics & finance only (14 econ/* sources)
+subscope glob                     global news only (17 news/* sources)
 subscope --all / -a               no time filter
 subscope -n <count>               limit to N items (non-interactive output)
 subscope -g <group>               filter by group (prefix match: -g ai matches ai/*)
 subscope --type <type>            filter by source type (website/youtube/twitter)
+subscope -j [N] / --json [N]     JSON output (optional limit), pipe-friendly for LLMs
 ```
 
-Flags combine: `subscope quick -n 5 -g ai/claude`.
+Flags combine: `subscope quick -n 5 -g ai/claude`, `subscope glob -j 20`.
 
 ### Interactive browser keys
 
@@ -42,14 +44,25 @@ subscope read https://www.federalreserve.gov/newsevents/pressreleases/monetary20
 subscope read <url> | llm "summarize the key policy changes"
 ```
 
+## JSON output
+
+```
+subscope glob -j 20               latest 20 global news as JSON array
+subscope eco -j                   all econ items as JSON (no limit)
+subscope -j 10 -g news/cctv      JSON filtered by group
+```
+
+Output: `[{"title":"...","source":"央视网","url":"...","summary":"...","publishedAt":"..."}]`. Clean text, no ANSI codes. Pipe to LLMs or other tools.
+
 ## Fetching
 
 ```
-subscope fetch                    pull all sources concurrently
+subscope fetch                    pull all sources (12 concurrent workers)
+subscope fetch -g <group>         fetch only matching group
 subscope fetch --notify           silent mode, sends Windows toast if new items found
 ```
 
-All sources fetch in parallel via Promise.allSettled. Individual failures don't block others. Output shows new item count per source.
+Sources stream to terminal as they complete, with per-source timing. Slow sources (>5s) highlighted in yellow. Failed sources retried up to 3 times. Summary shows total time elapsed.
 
 ## Background monitoring
 
@@ -98,7 +111,8 @@ subscope mode <name>              set default mode
 Built-in modes:
 - `formal` -- source type `website` in `ai/*` + `photonics/*` groups (blogs, docs, changelogs, support)
 - `quick` -- source types `youtube`, `twitter`
-- `eco` -- group prefix `econ` (Fed, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA)
+- `eco` -- group prefix `econ` (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA)
+- `glob` -- group prefix `news` (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu)
 
 Modes can filter by source type (`types`) and/or group prefix (`groups`). `-g` flag bypasses mode filtering and shows all source types in that group.
 

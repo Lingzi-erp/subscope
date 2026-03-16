@@ -10,7 +10,7 @@ subscope is a personal CLI feed aggregator. It pulls first-hand information from
 
 - Pure raw information, no AI processing in the feed pipeline
 - Each source gets the best possible adapter, not a generic one
-- Fast: 36 sources fetch concurrently in ~2 seconds
+- Fast: 58 sources fetch with 12 concurrent workers in ~3 seconds
 - Playwright as optional fallback for anti-bot sites (BLS, IMF) and Angular SPAs (NFRA), not in the hot path
 - Code should read like it was written by someone who cares
 
@@ -83,13 +83,19 @@ Website adapter detects RSS/Atom by content-type or XML declaration. Handles `pu
 Path-based strings: `ai/anthropic`, `photonics`. Filtering with `-g ai` matches prefix. `activeGroups` list determines what shows in default view. `folders` list persists empty folders independently of sources.
 
 ### Modes
-`formal` = website sources in `ai/*` + `photonics/*`. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). Modes filter by `types` (source type) AND/OR `groups` (group prefix) — both conditions must pass. `-g` flag bypasses mode filtering. Custom modes configurable in YAML.
+`formal` = website sources in `ai/*` + `photonics/*`. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). `glob` = global news (`news/*` groups). Modes filter by `types` (source type) AND/OR `groups` (group prefix) — both conditions must pass. `-g` flag bypasses mode filtering. Custom modes configurable in YAML.
 
 ### Interactive browser
 Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. Search box at top (cursor = -1). NEW badges tracked via `seen.json`. PDF download via URL pattern matching (Nature `.pdf` suffix, arXiv `/pdf/` path).
 
 ### Economics & Finance sources
-Thirteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA). Each has a dedicated adapter. Color-coded: Fed=sky blue, ECB=blue, PBOC=red, NBS=gold, BLS/BEA=olive, SEC=navy, Treasury=yellow, IMF=light blue, CSRC=cyan, MOF=purple, SAFE=blue, NFRA=orange.
+Fourteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), BOJ (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA). Each has a dedicated adapter.
+
+### Global news sources
+Seventeen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (HTML scrape), Al Jazeera (RSS), TASS (RSS), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), CCTV (JSONP API with precise timestamps), Xinhua (HTML scrape), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
+
+### JSON output (`-j`)
+`subscope glob -j 20` outputs clean JSON array: `[{title, source, url, summary, publishedAt}]`. Source names formatted for readability (e.g., "央视网" not "news.cctv.com/world"). Pipe-friendly for LLMs.
 
 ### Article reader (`subscope read`)
 Pipe-friendly full-text extractor for LLM consumption. Output: `# Title\n\ntext`. Per-site CSS selectors for all blog-type sources:
@@ -106,7 +112,7 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 
 ## Data flow
 
-1. `subscope fetch`: load config -> resolve adapters -> Promise.allSettled all fetches -> store.save (INSERT OR IGNORE, returns new count)
+1. `subscope fetch`: load config -> resolve adapters -> 12 concurrent workers fetch sources -> retry up to 3x on failure -> store.save (INSERT OR IGNORE) -> stream results to terminal with per-source timing
 2. `subscope` (read): load config -> activeSources (filter by mode + group) -> store.query (filter by sourceId, since) -> render
 
 ## Config location
@@ -133,9 +139,10 @@ If the site has RSS or standard HTML, the generic website adapter handles it aut
 ## Common patterns
 
 - ANSI colors: use `c(N)` for 256-color, constants for common ones
-- Dates: `timeAgo()` for display, ISO strings for storage
+- Dates: `timeAgo()` for display, ISO strings for storage. `dateOnlyToISO()` converts date-from-URL to noon local time (capped at now) for sources without precise timestamps (CCTV uses JSONP with precise times instead).
+- CJK display: `truncate()` in render.ts uses `displayWidth()` to account for double-width CJK characters in terminal output
 - Dedup: hash-based IDs, `INSERT OR IGNORE` in SQLite
-- Error handling: adapters throw on auth issues, return `[]` on parse failures. Pipeline uses `Promise.allSettled` so one failure doesn't block others.
+- Error handling: adapters throw on auth issues, return `[]` on parse failures. Pipeline retries each source up to 3 times (`retry()` in lib.ts) with backoff. 12 concurrent workers via queue-based semaphore (avoids DNS/TLS congestion from 50+ simultaneous connections). Individual failures don't block others.
 - Text cleanup: `cleanTweetText()` strips t.co links. `cleanText()` strips HTML tags and collapses whitespace.
 - TLS: all fetch calls use `tls: { rejectUnauthorized: false }` (Bun-specific) to handle proxy/cert issues with government sites.
 - Anti-bot: BLS requires full `Sec-Fetch-*` browser headers. SEC EDGAR requires declared User-Agent. BLS/IMF article pages use Playwright with system Chrome as fallback. CSRC uses UCAP CMS JSON API to bypass TLS fingerprinting. NFRA Angular SPA auto-detected (`{{data.` + `ng-controller`) and retried with Playwright `networkidle`.

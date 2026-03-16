@@ -6,7 +6,7 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 You follow AI companies and academic journals across blogs, X, YouTube, support pages, GitHub releases, RSS feeds. The information is scattered across dozens of URLs. subscope pulls it all into one place, organized by company, filterable by type, searchable, with PDF downloads for papers.
 
-Currently tracks 6 AI companies (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), 2 photonics journals (Nature Photonics, Light: Science & Applications), and 13 economics/finance institutions (Federal Reserve, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA). 36 sources, all fetched concurrently in ~2 seconds.
+Currently tracks 6 AI companies (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), 2 photonics journals, 14 economics/finance institutions (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), 17 global news sources (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), plus energy (IEA, EIA) and international orgs (UN, WHO, IAEA, WTO). 58 sources, fetched with 12 concurrent workers in ~3 seconds.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ subscope auth academic       # Papers: copy Cookie header from nature.com, run t
 Fetch and read:
 
 ```
-subscope fetch               # pull all sources (32 sources, ~2s)
+subscope fetch               # pull all sources (58 sources, ~3s)
 subscope                     # interactive browser with search
 ```
 
@@ -35,10 +35,12 @@ subscope                     # interactive browser with search
 subscope                     # browse items (up/down, enter to open, / to search, g for PDF)
 subscope quick               # social media only (X + YouTube)
 subscope formal              # AI + photonics websites (blogs, docs, support)
-subscope eco                 # economics & finance only (13 sources: Fed, ECB, PBOC, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA)
+subscope eco                 # economics & finance only (14 sources)
+subscope glob                # global news only (17 sources)
 subscope --all               # no time filter
 subscope -n 10               # latest 10
 subscope -g ai/anthropic     # filter by group
+subscope glob -j 20          # JSON output for LLM piping (latest 20)
 ```
 
 Background monitoring:
@@ -50,11 +52,12 @@ subscope watch-install       # Windows scheduled task, desktop notifications
 subscope watch-uninstall     # remove scheduled task
 ```
 
-Article reader (pipe-friendly for LLMs):
+Article reader and JSON output (pipe-friendly for LLMs):
 
 ```
 subscope read <url>          # extract clean article text from any source
 subscope read <url> | llm    # pipe to LLM for analysis
+subscope glob -j 20 | llm   # feed latest 20 news items as JSON to LLM
 ```
 
 Management:
@@ -93,7 +96,7 @@ Generic adapters: RSS/Atom feeds (auto-detect XML), HTML scraping (link extracti
 
 X/Twitter calls the same GraphQL endpoints the web app uses. Thread merging via conversation_id. No Playwright, no syndication, no paid API.
 
-All sources fetch concurrently via Promise.allSettled. Individual failures don't block others.
+Sources fetch with 12 concurrent workers (avoids DNS/TLS congestion). Each source streams to terminal as it completes with per-source timing. Failed sources retried up to 3 times. Individual failures don't block others.
 
 ## Groups
 
@@ -113,6 +116,7 @@ econ/
   fed         (Federal Reserve FOMC statements, monetary policy)
   ecb         (European Central Bank press releases, speeches)
   pboc        (中国人民银行 news, financial data reports)
+  boj         (Bank of Japan policy, statements)
   nbs         (国家统计局 CPI, GDP, PMI data releases)
   bls         (Bureau of Labor Statistics CPI, unemployment, payrolls)
   bea         (Bureau of Economic Analysis GDP, personal income, trade)
@@ -123,6 +127,14 @@ econ/
   mof         (财政部 fiscal policy, budget, bond issuance)
   safe        (外汇管理局 forex reserves, cross-border capital)
   nfra        (金融监管总局 banking/insurance regulation)
+news/
+  bbc, france24, dw, nhk, aljazeera, tass, yonhap, abc-au, cbc
+  ap, focustw, thehindu
+  cctv (world + china), xinhua (world + china), people
+energy/
+  iea, eia
+intl/
+  un, who, iaea, wto
 ```
 
 ## Stack
