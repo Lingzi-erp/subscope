@@ -43,7 +43,7 @@ const SYND_BASE = 'https://syndication.twitter.com/srv/timeline-profile/screen-n
 const fetchViaSyndication = async (username: string): Promise<RawTweet[]> => {
   const res = await fetch(`${SYND_BASE}${username}`, {
     headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(5000),
     tls: { rejectUnauthorized: false },
   } as any)
   if (!res.ok) throw new Error(`Syndication: ${res.status}`)

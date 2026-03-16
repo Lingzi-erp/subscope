@@ -104,11 +104,22 @@ export const fetchWithCurl = (url: string): string => {
   return html
 }
 
-/** Retry an async function up to `n` times with delay between attempts */
+/** Check if an error is worth retrying (network errors, 5xx = yes; 4xx, auth, missing deps = no) */
+const isTransient = (e: unknown): boolean => {
+  const msg = e instanceof Error ? e.message : String(e)
+  // HTTP 4xx — server explicitly rejected, retrying won't help
+  if (/\b(40[0-9]|41[0-9]|42[0-9]|43[0-9]|44[0-9]|45[0-9])\b/.test(msg)) return false
+  // Auth/config/dependency errors — won't resolve on retry
+  if (/auth required|Cannot find module|MODULE_NOT_FOUND/i.test(msg)) return false
+  return true
+}
+
+/** Retry an async function up to `n` times with delay between attempts.
+ *  Skips retry on non-transient errors (4xx HTTP). */
 export const retry = async <T>(fn: () => Promise<T>, n: number, delay = 1000): Promise<T> => {
   for (let i = 0; i < n; i++) {
     try { return await fn() } catch (e) {
-      if (i === n - 1) throw e
+      if (i === n - 1 || !isTransient(e)) throw e
       await new Promise(r => setTimeout(r, delay * (i + 1)))
     }
   }
