@@ -32,6 +32,10 @@ const BRAND: [string, number][] = [
   ['ecb', 33], ['treasury', 220], ['imf', 75],
   ['mof', 172], ['safe', 75], ['nfra', 214], ['csrc', 196],
   ['bbc', 167], ['france24', 75], ['dw', 33], ['nhk', 204], ['aljazeera', 214],
+  ['cgtn', 196], ['tass', 75],
+  ['yonhap', 39], ['yna.co.kr', 39],
+  ['abc-au', 40], ['abc.net.au', 40],
+  ['cbc', 160],
 ]
 
 const sourceColor = (name: string, _type: string, group?: string): string => {
@@ -67,6 +71,9 @@ const DISPLAY: [string, string][] = [
   ['feeds.bbci.co.uk', 'BBC World'], ['bbc.com', 'BBC'],
   ['aljazeera.com', 'Al Jazeera'],
   ['france24.com', 'France 24'],
+  ['cgtn.com', 'CGTN'], ['tass.com', 'TASS'],
+  ['yna.co.kr', 'Yonhap'], ['abc.net.au', 'ABC Australia'],
+  ['cbc.ca', 'CBC'],
 ]
 
 const formatSourceName = (name: string): string => {
