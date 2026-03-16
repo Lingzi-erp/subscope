@@ -54,6 +54,24 @@ export const dateOnlyToISO = (y: string, m: string, d: string, tz = '+08:00'): s
   return (noon > now ? now : noon).toISOString()
 }
 
+/** Fetch via curl — bypasses Cloudflare's TLS fingerprint blocking.
+ *  Bun's BoringSSL gets 403; curl's OpenSSL + Client Hints passes. */
+export const fetchWithCurl = (url: string): string => {
+  const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', url,
+    '-A', UA,
+    '-H', 'Sec-CH-UA: "Google Chrome";v="131", "Chromium";v="131"',
+    '-H', 'Sec-CH-UA-Mobile: ?0',
+    '-H', 'Sec-CH-UA-Platform: "Windows"',
+    '-H', 'Sec-Fetch-Dest: document',
+    '-H', 'Sec-Fetch-Mode: navigate',
+    '-H', 'Sec-Fetch-Site: none',
+  ], { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
+  if (r.exitCode !== 0) throw new Error(`curl failed: ${new TextDecoder().decode(r.stderr).trim()}`)
+  const html = new TextDecoder().decode(r.stdout)
+  if (html.length < 1000) throw new Error(`blocked (${html.length}b)`)
+  return html
+}
+
 /** Retry an async function up to `n` times with delay between attempts */
 export const retry = async <T>(fn: () => Promise<T>, n: number, delay = 1000): Promise<T> => {
   for (let i = 0; i < n; i++) {
