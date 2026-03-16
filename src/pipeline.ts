@@ -12,38 +12,54 @@ export interface ReadOpts {
   mode?: string
 }
 
-export const fetchAll = async (opts?: { group?: string }): Promise<number> => {
+export interface FetchResult {
+  name: string
+  count: number
+  added: number
+  error?: string
+}
+
+export const fetchAll = async (opts?: {
+  group?: string
+  onProgress?: (done: number, total: number) => void
+}): Promise<{ newItems: number; results: FetchResult[] }> => {
   const config = load()
   const store = createStore()
   const sources = opts?.group
     ? config.sources.filter(s => s.active !== false && (s.group === opts.group || s.group.startsWith(opts.group + '/')))
     : config.sources
 
-  // Fetch sources concurrently — result carries its own source reference
-  const results = await Promise.allSettled(
+  let done = 0
+  const settled = await Promise.allSettled(
     sources.map(async (source) => {
       const adapter = resolve(source.url)
-      const items = await adapter.fetch(source)
-      return { source, items }
+      try {
+        const items = await adapter.fetch(source)
+        return { source, items, error: undefined as string | undefined }
+      } catch (e: any) {
+        return { source, items: [] as FeedItem[], error: e?.message ?? String(e) }
+      } finally {
+        done++
+        opts?.onProgress?.(done, sources.length)
+      }
     })
   )
 
-  let total = 0
+  const results: FetchResult[] = []
   let newItems = 0
-  for (const result of results) {
-    if (result.status === 'fulfilled') {
-      const { source, items } = result.value
-      const added = store.save(items)
-      total += items.length
-      newItems += added
-      console.log(`  ${source.name} — ${items.length} items${added > 0 ? ` (${added} new)` : ''}`)
+  for (const r of settled) {
+    const { source, items, error } = (r as PromiseFulfilledResult<any>).value
+    if (error) {
+      results.push({ name: source.name, count: 0, added: 0, error })
     } else {
-      console.error(`  failed: ${result.reason}`)
+      const added = store.save(items)
+      newItems += added
+      results.push({ name: source.name, count: items.length, added })
     }
   }
 
   store.close()
-  return newItems
+  return { newItems, results }
 }
 
 const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000
