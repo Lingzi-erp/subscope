@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio'
-import { item, sortDesc } from '../../lib.ts'
+import { item, sortDesc, TLS } from '../../lib.ts'
 import type { Source, FeedItem } from '../../types.ts'
 
 const HEADERS = {
@@ -14,7 +14,7 @@ const HEADERS = {
 
 // BLS RSS feed — one giant <item> with all indicators in HTML
 export const fetchBLS = async (source: Source): Promise<FeedItem[]> => {
-  const res = await fetch(source.url, { headers: HEADERS })
+  const res = await fetch(source.url, { headers: HEADERS, ...TLS(source.url) } as any)
   if (!res.ok) throw new Error(`BLS: ${res.status}`)
   const $ = cheerio.load(await res.text(), { xml: true })
 
