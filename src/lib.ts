@@ -10,7 +10,7 @@ export const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 // Skip cert verification only for government/institutional sites with proxy/cert issues
 const INSECURE_HOSTS = [
   // US/EU
-  'bls.gov', 'bea.gov', 'sec.gov', 'treasury.gov', 'imf.org',
+  'bls.gov', 'bea.gov', 'sec.gov', 'treasury.gov', 'imf.org', 'ftc.gov',
   'federalreserve.gov', 'ecb.europa.eu',
   // China (CDN/proxy cert issues common)
   'pbc.gov.cn', 'stats.gov.cn', 'csrc.gov.cn', 'mof.gov.cn',
