@@ -78,7 +78,40 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     })
   }
 
-  return { title, text: extractText($body, $) }
+  let text = extractText($body, $)
+
+  // If content is too thin, retry with Playwright
+  if (text.length < 100) {
+    try {
+      // Check for embedded live blog iframe (UN News uses Direkt.se)
+      const iframeId = html.match(/ifr-direkt-([a-f0-9-]+)/)?.[1]
+      const browserUrl = iframeId
+        ? `https://direkt-klient.ifragasatt.se/?aId=${iframeId}`
+        : url
+      const browserHtml = fetchWithBrowser(browserUrl, 'networkidle')
+      const $b = cheerio.load(browserHtml)
+
+      if (!iframeId) {
+        // Re-extract title from Playwright-rendered page
+        const titleSel2 = site?.title ?? 'h1, title'
+        const browserTitle = findFirst($b, titleSel2)?.text || $b('title').text().trim()
+        if (browserTitle && !title) title = site?.cleanTitle ? site.cleanTitle(browserTitle) : browserTitle
+      }
+
+      let $body2: cheerio.Cheerio<any> | null = iframeId ? null : (site?.pick?.($b) ?? null)
+      if (!$body2?.length) {
+        const sel2 = iframeId ? 'body' : (site?.selector ?? 'article, main, .content, .post-body, body')
+        $body2 = findFirst($b, sel2)?.el ?? null
+      }
+      if (!$body2?.length) $body2 = $b('body')
+      $body2.find('script, style, noscript, nav, footer, .nav, .footer, .sidebar, .breadcrumb, svg, .ad, .share, .social, [class*="share"], button').remove()
+
+      const browserText = extractText($body2, $b)
+      if (browserText.length > text.length) text = browserText
+    } catch {}
+  }
+
+  return { title, text }
 }
 
 // ── Table extraction ──
