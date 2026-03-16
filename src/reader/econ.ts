@@ -96,7 +96,7 @@ export const econRules: SiteRule[] = [
   {
     test: u => u.includes('nfra.gov.cn'),
     selector: '.Section0, .content, article',
-    title: 'h1, .detail-title, title',
+    title: '.wenzhang-title.ng-binding, h1, .detail-title, title',
     cleanTitle: t => t.replace(/\s*[-–—_]\s*国家金融监督管理总局.*$/, '').trim(),
   },
   {
@@ -134,6 +134,17 @@ export const econRules: SiteRule[] = [
     selector: '.node__content .field--name-body',
     title: 'h1.node-title',
     cleanTitle: t => t.replace(/\s*\|\s*(Federal Trade Commission|FTC)$/, '').trim(),
+  },
+  {
+    test: u => u.includes('news.un.org'),
+    selector: '.paragraph--type--one-column-text',
+    title: 'h1, title',
+    cleanTitle: t => t.replace(/\s*\|\s*UN News$/, '').trim(),
+  },
+  {
+    test: u => u.includes('who.int'),
+    selector: 'article, .content-block',
+    title: 'h1',
   },
   {
     test: u => u.includes('wto.org'),
