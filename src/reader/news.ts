@@ -82,6 +82,29 @@ export const newsRules: SiteRule[] = [
     },
   },
   {
+    test: u => u.includes('apnews.com'),
+    selector: '.RichTextStoryBody',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[|–—]\s*AP News$/, '').trim(),
+    pick: $ => {
+      const $body = $('.RichTextStoryBody').first().clone()
+      $body.find('[class*="RelatedStories"], [class*="Advertisement"]').remove()
+      return $body
+    },
+  },
+  {
+    test: u => u.includes('focustaiwan.tw'),
+    selector: '.PrimarySide .paragraph',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[|–—]\s*Focus Taiwan$/, '').trim(),
+  },
+  {
+    test: u => u.includes('thehindu.com'),
+    selector: '.articlebodycontent',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[|–—]\s*The Hindu$/, '').trim(),
+  },
+  {
     test: u => u.includes('nhk.or.jp') || u.includes('nhk.jp'),
     selector: '.p-detail__body, article, main',
     title: 'h1',

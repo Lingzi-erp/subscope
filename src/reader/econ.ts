@@ -99,4 +99,10 @@ export const econRules: SiteRule[] = [
     title: 'h1, .detail-title, title',
     cleanTitle: t => t.replace(/\s*[-–—_]\s*国家金融监督管理总局.*$/, '').trim(),
   },
+  {
+    test: u => u.includes('boj.or.jp'),
+    selector: 'div.outline, main#contents',
+    title: 'main#contents h1, h1',
+    cleanTitle: t => t.replace(/\s*\[Speech\]\s*/i, '').replace(/\s*[-–—]\s*Bank of Japan$/, '').trim(),
+  },
 ]

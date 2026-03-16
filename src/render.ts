@@ -36,6 +36,7 @@ const BRAND: [string, number][] = [
   ['yonhap', 39], ['yna.co.kr', 39],
   ['abc-au', 40], ['abc.net.au', 40],
   ['cbc', 160],
+  ['apnews', 255], ['focustaiwan', 39], ['thehindu', 208], ['boj', 231],
 ]
 
 const sourceColor = (name: string, _type: string, group?: string): string => {
@@ -102,6 +103,8 @@ const DISPLAY: [string, string][] = [
   ['tass.com', 'TASS'],
   ['yna.co.kr', 'Yonhap'], ['abc.net.au', 'ABC Australia'],
   ['cbc.ca', 'CBC'],
+  ['apnews.com', 'AP News'], ['focustaiwan.tw', 'Focus Taiwan'],
+  ['thehindu.com', 'The Hindu'], ['boj.or.jp', 'BOJ'],
 ]
 
 export const formatSourceName = (name: string): string => {

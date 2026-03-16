@@ -22,6 +22,8 @@ import { fetchNHK } from './sites/nhk.ts'
 import { fetchPeople } from './sites/people.ts'
 import { fetchCCTV } from './sites/cctv.ts'
 import { fetchXinhua } from './sites/xinhua.ts'
+import { fetchBOJ } from './sites/boj.ts'
+import { fetchAPNews } from './sites/apnews.ts'
 import type { SourceAdapter, SourceType } from '../types.ts'
 
 // Site-specific adapters — matched by (hostname, pathPrefix)
@@ -48,6 +50,8 @@ const siteRules: { host: string; path?: string; fetch: SourceAdapter['fetch'] }[
   { host: 'people.com.cn', fetch: fetchPeople },
   { host: 'news.cctv.com', fetch: fetchCCTV },
   { host: 'news.cn', fetch: fetchXinhua },
+  { host: 'boj.or.jp', fetch: fetchBOJ },
+  { host: 'apnews.com', fetch: fetchAPNews },
 ]
 
 const matchSite = (url: string): SourceAdapter['fetch'] | undefined => {
