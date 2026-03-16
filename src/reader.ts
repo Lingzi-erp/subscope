@@ -91,7 +91,7 @@ const SITES: SiteRule[] = [
   },
   {
     test: u => u.includes('csrc.gov.cn'),
-    selector: '.main-right, .detail-content',
+    selector: '.detail-news',
     title: 'title',
     cleanTitle: t => t.replace(/\s*[-–—_]\s*中国证券监督管理委员会.*$/, '').trim(),
   },
@@ -105,7 +105,7 @@ const SITES: SiteRule[] = [
     test: u => u.includes('safe.gov.cn'),
     selector: '.detail_content, .Custom_UnionStyle',
     title: 'title',
-    cleanTitle: t => t.replace(/\s*[-–—_]\s*国家外汇管理局.*$/, '').trim(),
+    cleanTitle: t => t.replace(/\s*[_\-–—]\s*(国家外汇管理局|数据解读|要闻发布|政策法规解读).*$/, '').trim(),
   },
   {
     test: u => u.includes('nfra.gov.cn'),
@@ -207,6 +207,10 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     const res = await fetch(url, { headers, ...TLS(url) } as any)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     html = await res.text()
+    // Angular SPA: detect unrendered template and retry with Playwright networkidle
+    if (html.includes('{{data.') && html.includes('ng-controller')) {
+      html = fetchWithBrowser(url, 'networkidle')
+    }
   } catch {
     if (site?.feedUrl) {
       const rss = await readFromFeed(url, site.feedUrl).catch(() => null)

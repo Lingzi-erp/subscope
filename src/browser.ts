@@ -3,7 +3,7 @@ import { UA } from './lib.ts'
 
 // Playwright via system Chrome — anti-bot bypass for BLS, IMF, etc.
 // Spawned through node (not Bun) due to oven-sh/bun#27977
-export const fetchWithBrowser = (url: string): string => {
+export const fetchWithBrowser = (url: string, waitUntil: 'domcontentloaded' | 'networkidle' = 'domcontentloaded'): string => {
   const projectRoot = join(import.meta.dir, '..')
   const script = [
     `const{chromium}=require('playwright');`,
@@ -13,7 +13,7 @@ export const fetchWithBrowser = (url: string): string => {
     `const ctx=await b.newContext({ignoreHTTPSErrors:true,userAgent:${JSON.stringify(UA)}});`,
     `const p=await ctx.newPage();`,
     `await p.addInitScript(()=>{Object.defineProperty(navigator,'webdriver',{get:()=>false})});`,
-    `await p.goto(${JSON.stringify(url)},{waitUntil:'domcontentloaded',timeout:20000});`,
+    `await p.goto(${JSON.stringify(url)},{waitUntil:'${waitUntil}',timeout:20000});`,
     `process.stdout.write(await p.content());`,
     `await b.close();`,
     `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
