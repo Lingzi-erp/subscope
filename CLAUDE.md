@@ -138,9 +138,16 @@ If the site has RSS or standard HTML, the generic website adapter handles it aut
 
 No test suite. The tool is tested by using it. If `subscope fetch && subscope` works, it works.
 
-## Commit checklist
+## Commit discipline
 
-When committing changes, always update these docs together:
+Small, atomic commits. One commit = one logical change. Never bundle multiple features or fixes into a single commit. Examples:
+- **Good**: `feat: add MOF adapter` (one adapter, one commit)
+- **Good**: `fix: BLS missing TLS cert bypass` (one bug, one commit)
+- **Bad**: `feat: add MOF, SAFE, NFRA, CSRC adapters` (four adapters crammed into one commit)
+
+Commit proactively when a logical unit of work is complete — don't wait to be asked. Judge the right moment: a new adapter works, a bug is fixed, a refactor is done. Push immediately after commit.
+
+When a commit changes functionality, immediately follow with a separate docs commit updating:
 - `CLAUDE.md` — project context (this file)
 - `README.md` — user-facing documentation
 - `COMMANDS.md` — command reference
