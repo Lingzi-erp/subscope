@@ -66,8 +66,8 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
   }
   if (!$body?.length) $body = $('body')
 
-  // Strip noise
-  $body.find('script, style, noscript, nav, footer, .nav, .footer, .sidebar, .breadcrumb, img, svg, iframe, video, .ad, .share, .social, [class*="share"], button').remove()
+  // Strip noise (keep img/video/a for placeholders in extractText)
+  $body.find('script, style, noscript, nav, footer, .nav, .footer, .sidebar, .breadcrumb, svg, .ad, .share, .social, [class*="share"], button').remove()
 
   // Remove headings duplicating the title
   if (title) {
@@ -166,7 +166,33 @@ const extractText = ($el: cheerio.Cheerio<any>, $: cheerio.CheerioAPI): string =
     }
     if (node.type !== 'tag') return
     const tag = node.name?.toLowerCase()
-    if (['script', 'style', 'nav', 'footer', 'img', 'svg', 'iframe'].includes(tag)) return
+    if (['script', 'style', 'nav', 'footer', 'svg', 'noscript'].includes(tag)) return
+
+    // Media placeholders
+    if (tag === 'img') {
+      const alt = $(node).attr('alt')?.trim()
+      if (alt && alt.length > 4) blocks.push(`\n[image: ${alt}]\n`)
+      return
+    }
+    if (tag === 'video') { blocks.push('\n[video]\n'); return }
+    if (tag === 'iframe') {
+      const src = $(node).attr('src')?.trim()
+      if (src && (src.includes('youtube') || src.includes('vimeo'))) blocks.push(`\n[embed: ${src}]\n`)
+      return
+    }
+
+    // Links: preserve URL as markdown
+    if (tag === 'a') {
+      const href = $(node).attr('href')?.trim()
+      const text = $(node).text().trim()
+      if (text && href && href.startsWith('http')) {
+        blocks.push(`[${text}](${href})`)
+      } else {
+        for (const child of node.children ?? []) walk(child)
+      }
+      return
+    }
+
     if (tag === 'table') { const md = tableToMarkdown($, node); if (md) blocks.push(md); return }
 
     const isBlock = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'pre', 'section', 'article'].includes(tag)
