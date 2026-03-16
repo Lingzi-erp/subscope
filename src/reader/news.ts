@@ -67,7 +67,11 @@ export const newsRules: SiteRule[] = [
     title: 'h1',
     pick: $ => {
       const $body = $('[class*="engagement_target"]').first().clone()
-      $body.find('aside, figure').remove()
+      $body.find('aside, figure, [class*="embed"], [class*="twitter"], [class*="social"]').remove()
+      // Strip "Loading ... content" placeholders
+      $body.find('*').each((_, el) => {
+        if (/^Loading\s+\w+\s+content$/i.test($(el).text().trim())) $(el).remove()
+      })
       return $body
     },
   },
@@ -88,7 +92,11 @@ export const newsRules: SiteRule[] = [
     cleanTitle: t => t.replace(/\s*[|–—]\s*AP News$/, '').trim(),
     pick: $ => {
       const $body = $('.RichTextStoryBody').first().clone()
-      $body.find('[class*="RelatedStories"], [class*="Advertisement"]').remove()
+      $body.find('[class*="RelatedStories"], [class*="Advertisement"], [class*="CardGrid"], [class*="HubPeek"]').remove()
+      // Strip "N MIN READ" labels from related story cards
+      $body.find('span, div').each((_, el) => {
+        if (/^\d+\s*MIN READ$/.test($(el).text().trim())) $(el).remove()
+      })
       return $body
     },
   },
