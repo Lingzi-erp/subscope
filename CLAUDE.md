@@ -57,7 +57,12 @@ src/
       mof.ts                Ministry of Finance news scraper (财政部)
       safe.ts               State Administration of Foreign Exchange scraper (外汇管理局)
       nfra.ts               National Financial Regulatory Administration (Playwright for Angular SPA)
-  reader.ts                 Article full-text extractor (per-site CSS selectors + Playwright fallback)
+  reader/
+    index.ts                Article full-text extractor (core logic + Playwright fallback)
+    types.ts                SiteRule interface
+    econ.ts                 13 economics/finance site reader rules
+    news.ts                 12 news media site reader rules
+    ai.ts                   8 AI company + GitHub reader rules
 ```
 
 ## Key architectural decisions
@@ -90,6 +95,7 @@ Thirteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC
 Pipe-friendly full-text extractor for LLM consumption. Output: `# Title\n\ntext`. Per-site CSS selectors for all blog-type sources:
 - **AI**: Anthropic (CSS modules `Body-module`), Claude blog (`.u-rich-text-blog`), Claude Support (`.article_body`), OpenAI (`article`), DeepMind (`main`), DeepSeek (`.theme-doc-markdown`), xAI (`.prose.prose-invert`)
 - **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), NBS (`.txt-content`), BLS (Playwright + Chrome anti-detection), BEA (`.field--name-body`), Treasury (`og:description` meta), IMF (`article .column-padding` via Playwright), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle)
+- **News**: BBC (`data-component` text blocks), France24 (`.t-content__body`), DW (`.rich-text`), NHK (generic fallback), Al Jazeera (`.wysiwyg`), TASS (`.text-content`), Yonhap (`article.story-news > p`), ABC Australia (`engagement_target`), CBC (`.story > p/h2`), People's Daily (`.rm_txt_con`), CCTV (`.content_area`), Xinhua (`#detailContent`)
 - **Other**: GitHub releases (`[data-test-selector="body-content"]`)
 - Anti-bot bypass: Playwright spawns system Chrome with `--disable-blink-features=AutomationControlled`, `navigator.webdriver=false`, `--ignore-certificate-errors`
 - Tables: colspan/rowspan grid extraction, compound headers flattened to `Group: Column` format
