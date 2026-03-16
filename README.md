@@ -6,7 +6,7 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 You follow AI companies and academic journals across blogs, X, YouTube, support pages, GitHub releases, RSS feeds. The information is scattered across dozens of URLs. subscope pulls it all into one place, organized by company, filterable by type, searchable, with PDF downloads for papers.
 
-Currently tracks 6 AI companies (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), 2 photonics journals (Nature Photonics, Light: Science & Applications), and 9 economics/finance institutions (Federal Reserve, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF). 32 sources, all fetched concurrently in ~2 seconds.
+Currently tracks 6 AI companies (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), 2 photonics journals (Nature Photonics, Light: Science & Applications), and 13 economics/finance institutions (Federal Reserve, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA). 36 sources, all fetched concurrently in ~2 seconds.
 
 ## Quick start
 
@@ -35,7 +35,7 @@ subscope                     # interactive browser with search
 subscope                     # browse items (up/down, enter to open, / to search, g for PDF)
 subscope quick               # social media only (X + YouTube)
 subscope formal              # official sources only (blogs, docs, support)
-subscope eco                 # economics & finance only (Fed, ECB, PBOC, NBS, BLS, BEA, SEC, Treasury, IMF)
+subscope eco                 # economics & finance only (13 sources: Fed, ECB, PBOC, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA)
 subscope --all               # no time filter
 subscope -n 10               # latest 10
 subscope -g ai/anthropic     # filter by group
@@ -87,7 +87,7 @@ The default `subscope` command opens an interactive browser:
 Source (YAML) --> Adapter (fetch + parse) --> Store (SQLite) --> Render (TUI)
 ```
 
-Site-specific adapters: Anthropic (RSC JSON payload), Claude blog (HTML articles), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback).
+Site-specific adapters: Anthropic (RSC JSON payload), Claude blog (HTML articles), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA).
 
 Generic adapters: RSS/Atom feeds (auto-detect XML), HTML scraping (link extraction), YouTube (ytInitialData JSON), X/Twitter (native GraphQL API), GitHub (Atom release feeds).
 
@@ -119,6 +119,10 @@ econ/
   sec         (SEC EDGAR 8-K company filings)
   treasury    (US Treasury sanctions, fiscal policy, debt)
   imf         (IMF global economic assessments, country reports)
+  csrc        (证监会 securities regulation, market rules)
+  mof         (财政部 fiscal policy, budget, bond issuance)
+  safe        (外汇管理局 forex reserves, cross-border capital)
+  nfra        (金融监管总局 banking/insurance regulation)
 ```
 
 ## Stack

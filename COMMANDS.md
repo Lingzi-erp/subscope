@@ -6,7 +6,7 @@
 subscope                          interactive browser (default: formal mode, last 14 days)
 subscope quick                    social media only (X + YouTube)
 subscope formal                   official sources only (blogs, docs, support)
-subscope eco                      economics & finance only (econ/* groups)
+subscope eco                      economics & finance only (13 econ/* sources)
 subscope --all / -a               no time filter
 subscope -n <count>               limit to N items (non-interactive output)
 subscope -g <group>               filter by group (prefix match: -g ai matches ai/*)
@@ -35,7 +35,7 @@ NEW badge appears on unseen items. Disappears when you scroll past them. Seen st
 subscope read <url>               fetch article and output clean text (# Title + body)
 ```
 
-Outputs `# Title\n\ntext` format — pipe-friendly for LLMs. Per-site extractors for all blog-type sources (AI companies + economics institutions). Falls back to Playwright browser for anti-bot sites (BLS, IMF). Tables rendered as Markdown with compound headers flattened to `Group: Column` format. Example:
+Outputs `# Title\n\ntext` format — pipe-friendly for LLMs. Per-site extractors for all blog-type sources (AI companies + economics institutions). Falls back to Playwright browser for anti-bot sites (BLS, IMF) and Angular SPAs (NFRA — auto-detected and retried with `networkidle`). Tables rendered as Markdown with compound headers flattened to `Group: Column` format. Example:
 
 ```
 subscope read https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm
@@ -98,7 +98,7 @@ subscope mode <name>              set default mode
 Built-in modes:
 - `formal` -- source type `website` (blogs, docs, changelogs, support)
 - `quick` -- source types `youtube`, `twitter`
-- `eco` -- group prefix `econ` (Fed, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF)
+- `eco` -- group prefix `econ` (Fed, ECB, PBOC, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA)
 
 Modes can filter by source type (`types`) and/or group prefix (`groups`). `-g` flag bypasses mode filtering and shows all source types in that group.
 
