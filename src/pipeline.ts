@@ -35,16 +35,14 @@ export const fetchAll = async (opts?: {
   const results: FetchResult[] = []
   let newItems = 0
 
-  // Concurrency limiter — avoid DNS/TLS congestion from too many simultaneous connections
+  // 12 concurrent workers — queue-based semaphore avoids DNS/TLS congestion
   const CONCURRENCY = 12
-  let running = 0
   const queue = [...sources]
   const workers: Promise<void>[] = []
 
   const runNext = async (): Promise<void> => {
     while (queue.length > 0) {
       const source = queue.shift()!
-      running++
       const adapter = resolve(source.url)
       const t0 = Date.now()
       let result: FetchResult
@@ -56,7 +54,6 @@ export const fetchAll = async (opts?: {
       } catch (e: any) {
         result = { name: source.name, count: 0, added: 0, ms: Date.now() - t0, error: e?.message ?? String(e) }
       }
-      running--
       results.push(result)
       done++
       opts?.onResult?.(result, done, sources.length)
