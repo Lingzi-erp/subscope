@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio'
-import { join } from 'path'
-import { UA, TLS, findFirst, retry } from '../lib.ts'
+import { UA, TLS, findFirst, retry, fetchWithCffi } from '../lib.ts'
 import { fetchWithBrowser } from '../browser.ts'
 import type { SiteRule } from './types.ts'
 import { econRules } from './econ.ts'
@@ -10,37 +9,16 @@ import { aiRules } from './ai.ts'
 const SITES: SiteRule[] = [...econRules, ...newsRules, ...aiRules]
 
 export const readArticle = async (url: string): Promise<{ title: string; text: string }> => {
-  // IRENA: Azure WAF blocks headless Chrome; non-headless --start-minimized bypasses
+  // IRENA: Azure WAF blocks Chrome TLS; curl_cffi with Safari impersonation bypasses
   if (url.includes('irena.org/News/')) {
-    const projectRoot = join(import.meta.dir, '..')
-    const script = [
-      `const{chromium}=require('playwright');`,
-      `(async()=>{`,
-      `const b=await chromium.launch({headless:false,channel:'chrome',`,
-      `args:['--disable-blink-features=AutomationControlled','--start-minimized']});`,
-      `const p=await b.newPage();`,
-      `await p.addInitScript(()=>{Object.defineProperty(navigator,'webdriver',{get:()=>false})});`,
-      `await p.goto(${JSON.stringify(url)},{waitUntil:'domcontentloaded',timeout:15000});`,
-      `const r=await p.evaluate(()=>{`,
-      `const t=document.querySelector('h1')?.textContent?.trim()||document.title;`,
-      `const el=document.querySelector('.c-RichText,.m-RichText');`,
-      `const ps=el?[...el.querySelectorAll('p,h2,h3,li,blockquote')].map(e=>e.tagName==='LI'?'• '+e.textContent.trim():e.textContent.trim()).filter(t=>t.length>5):[];`,
-      `return JSON.stringify({t,ps})});`,
-      `process.stdout.write(r);`,
-      `await b.close();`,
-      `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
-    ].join('')
-    const r = Bun.spawnSync(['node', '-e', script], {
-      stdout: 'pipe', stderr: 'pipe', timeout: 25_000,
-      cwd: projectRoot,
-      env: { ...process.env, NODE_PATH: join(projectRoot, 'node_modules') },
-    })
-    if (r.exitCode === 0) {
-      try {
-        const { t, ps } = JSON.parse(new TextDecoder().decode(r.stdout))
-        if (ps.length > 0) return { title: t, text: ps.join('\n\n') }
-      } catch {}
-    }
+    try {
+      const html = fetchWithCffi(url)
+      const $ = cheerio.load(html)
+      const title = $('h1').first().text().trim() || $('title').text().trim()
+      $('script, style, nav, footer, header, [class*="Toolbar"]').remove()
+      const $body = $('.c-RichText, .m-RichText').first()
+      if ($body.length && $body.text().trim().length > 100) return { title, text: extractText($body, $) }
+    } catch {}
   }
 
   // EU Presscorner: Angular SPA, use JSON API directly

@@ -54,6 +54,17 @@ export const dateOnlyToISO = (y: string, m: string, d: string, tz = '+08:00'): s
   return (noon > now ? now : noon).toISOString()
 }
 
+/** Fetch via curl_cffi (Python) — impersonates Safari/Chrome TLS fingerprint.
+ *  Bypasses Azure WAF and other advanced bot detection that checks JA3/JA4. */
+export const fetchWithCffi = (url: string, impersonate = 'safari17_0'): string => {
+  const script = join(import.meta.dir, 'cffi_fetch.py')
+  const r = Bun.spawnSync(['python', script, url, impersonate], {
+    stdout: 'pipe', stderr: 'pipe', timeout: 20_000,
+  })
+  if (r.exitCode !== 0) throw new Error(`cffi_fetch failed: ${new TextDecoder().decode(r.stderr).trim()}`)
+  return new TextDecoder().decode(r.stdout)
+}
+
 /** Fetch via curl — bypasses Cloudflare's TLS fingerprint blocking.
  *  Bun's BoringSSL gets 403; curl's OpenSSL + Client Hints passes. */
 export const fetchWithCurl = (url: string): string => {

@@ -1,39 +1,31 @@
 import * as cheerio from 'cheerio'
-import { item, sortDesc } from '../../lib.ts'
+import { item, sortDesc, fetchWithCffi } from '../../lib.ts'
 import type { Source, FeedItem } from '../../types.ts'
 
 const BASE = 'https://www.irena.org'
 
-// IRENA's Azure WAF blocks all pages (403) but sitemap.xml is open.
-// Extract press release URLs + titles from sitemap, dates from URL path.
+// IRENA: Azure WAF blocks Chrome TLS but Safari passes via curl_cffi
 export const fetchIRENA = async (source: Source): Promise<FeedItem[]> => {
-  // Azure WAF blocks Chrome UA but allows simple UA — don't impersonate, just be honest
-  const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', `${BASE}/sitemap.xml`, '-A', 'Mozilla/5.0'],
-    { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
-  if (r.exitCode !== 0) throw new Error('IRENA sitemap fetch failed')
-  const $ = cheerio.load(new TextDecoder().decode(r.stdout), { xml: true })
+  const $ = cheerio.load(fetchWithCffi(source.url))
   const items: FeedItem[] = []
   const seen = new Set<string>()
 
-  $('loc').each((_, el) => {
-    const rawUrl = $(el).text().trim()
-    if (!rawUrl.includes('/News/pressreleases/')) return
-    // Current year only
-    const year = new Date().getFullYear()
-    if (!rawUrl.includes(`/${year}/`)) return
-    // Skip translated versions (end with -ZH, -RU, -FR, -ES, -AR, -PT, etc.)
-    if (/-(?:ZH|RU|FR|ES|AR|PT|JP|IT|DE|KO)$/.test(rawUrl)) return
+  $('a[href*="/News/"]').each((_, el) => {
+    const $a = $(el)
+    const href = $a.attr('href')
+    if (!href || href === '/News' || href.endsWith('/News/')) return
+    if (!href.includes('/pressreleases/') && !href.includes('/articles/')) return
 
-    const url = rawUrl.replace('http://', 'https://')
+    const title = $a.text().trim() || $a.attr('title')?.trim()
+    if (!title || title.length < 10 || title.length > 300) return
+    if (['News', 'Press Releases', 'Articles', 'Events'].includes(title)) return
+    // Skip translated versions
+    if (/-(?:ZH|RU|FR|ES|AR|PT|JP|IT|DE|KO)$/.test(href)) return
+
+    const url = href.startsWith('http') ? href : `${BASE}${href}`
     if (seen.has(url)) return
     seen.add(url)
 
-    // Title from URL slug: "Renewables-Jobs-See-First-Slowdown" → "Renewables Jobs See First Slowdown"
-    const slug = url.split('/').pop()!
-    const title = slug.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
-    if (!title || title.length < 10) return
-
-    // Date from URL path: /2026/Jan/
     const dateMatch = url.match(/\/(\d{4})\/(\w{3})\//)
     let publishedAt: string | undefined
     if (dateMatch) {
