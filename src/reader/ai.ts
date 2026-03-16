@@ -51,7 +51,7 @@ export const aiRules: SiteRule[] = [
     selector: 'article',
     title: 'h1',
     cleanTitle: t => t.replace(/\s*\|\s*OpenAI$/, '').trim(),
-    feedUrl: 'https://openai.com/news/rss.xml',
+    // No feedUrl — RSS only has summaries. Cloudflare blocks HTTP, falls through to Playwright.
   },
   {
     test: u => u.includes('deepmind.google'),
