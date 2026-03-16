@@ -86,7 +86,12 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     html = await retry(async () => {
       const res = await fetch(url, { headers, ...TLS(url) } as any)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      return res.text()
+      // Detect charset from Content-Type or HTML meta tag
+      const buf = Buffer.from(await res.arrayBuffer())
+      const ct = res.headers.get('content-type') || ''
+      const csMatch = ct.match(/charset=([\w-]+)/i) || buf.toString('ascii').match(/charset=([\w-]+)/i)
+      const cs = csMatch?.[1]?.toLowerCase() ?? 'utf-8'
+      return (cs === 'utf-8' || cs === 'utf8') ? buf.toString('utf-8') : new TextDecoder(cs).decode(buf)
     }, 3, 500)
     // SPA detection: Angular templates or large HTML with no <p> content
     if (html.includes('{{data.') && html.includes('ng-controller')) {

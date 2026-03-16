@@ -103,10 +103,14 @@ export const econRules: SiteRule[] = [
     test: u => u.includes('boj.or.jp'),
     selector: 'div.outline, main#contents',
     title: 'main#contents h1, h1',
-    cleanTitle: t => t.replace(/\s*\[Speech\]\s*/i, '').replace(/\s*[-–—]\s*Bank of Japan$/, '').trim(),
+    cleanTitle: t => t
+      .replace(/\s*\[Speech\]\s*/i, '')
+      .replace(/\s*[-–—]\s*Bank of Japan$/, '')
+      .replace(/(.)(?=Speech at |Remarks at |Address at |Keynote )/g, '$1 — ')
+      .trim(),
   },
   {
-    test: u => u.includes('eia.gov'),
+    test: u => u.includes('eia.gov/todayinenergy'),
     selector: '.tie-article',
     title: '.tie-article h2, title',
     cleanTitle: t => t.replace(/\s*[-–—]\s*(U\.S\. Energy|Today in Energy|EIA).*$/, '').trim(),
@@ -135,6 +139,15 @@ export const econRules: SiteRule[] = [
     selector: '.paragraph--type--one-column-text',
     title: 'h1, title',
     cleanTitle: t => t.replace(/\s*\|\s*UN News$/, '').trim(),
+    pick: $ => {
+      const $body = $('.paragraph--type--one-column-text').first().clone()
+      $body.find('[class*="twitter"], [class*="soundcloud"], [class*="embed"], [class*="social-media"]').remove()
+      // Strip bare platform names from embed placeholders
+      $body.find('*').each((_, el) => {
+        if (/^(Soundcloud|Tweet URL|Instagram)$/i.test($(el).text().trim())) $(el).remove()
+      })
+      return $body
+    },
   },
   {
     test: u => u.includes('who.int'),
