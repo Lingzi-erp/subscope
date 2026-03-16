@@ -123,12 +123,7 @@ export const econRules: SiteRule[] = [
     title: 'h1',
     cleanTitle: t => t.replace(/\s*\|\s*IAEA$/, '').trim(),
   },
-  {
-    test: u => u.includes('ec.europa.eu/commission/presscorner'),
-    selector: '.ecl-editor',
-    title: 'h1',
-    cleanTitle: t => t.replace(/\s*\|\s*European Commission$/, '').trim(),
-  },
+  // EU Presscorner: handled via JSON API in reader/index.ts (Angular SPA bypass)
   {
     test: u => u.includes('ftc.gov'),
     selector: '.node__content .field--name-body',

@@ -9,6 +9,25 @@ import { aiRules } from './ai.ts'
 const SITES: SiteRule[] = [...econRules, ...newsRules, ...aiRules]
 
 export const readArticle = async (url: string): Promise<{ title: string; text: string }> => {
+  // EU Presscorner: Angular SPA, use JSON API directly
+  if (url.includes('ec.europa.eu/commission/presscorner/detail')) {
+    const match = url.match(/detail\/(\w+)\/([A-Z]+_\d+_?\d*)/)
+    if (match) {
+      const ref = match[2]!.replace(/_/g, '/')
+      const lang = match[1]!.toUpperCase()
+      const api = `https://ec.europa.eu/commission/presscorner/api/documents?reference=${ref}&language=${lang}`
+      const res = await fetch(api, { headers: { 'User-Agent': UA } })
+      if (res.ok) {
+        const json = (await res.json()) as any
+        const title = json.docuLanguageResource?.title ?? ref
+        const html = json.docuLanguageResource?.htmlContent ?? ''
+        const $ = cheerio.load(html)
+        $('a').each((_, el) => { const $a = $(el); $a.replaceWith($a.text()) })
+        return { title, text: $.text().replace(/\s+/g, ' ').trim() }
+      }
+    }
+  }
+
   // SEC EDGAR: filing index → auto-follow to actual document
   if (url.includes('sec.gov') && url.includes('-index.htm')) {
     const resolved = await resolveEdgarDoc(url)
