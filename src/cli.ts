@@ -68,11 +68,13 @@ const commands: Record<string, () => Promise<void>> = {
     const { newItems, results } = await fetchAll({
       group,
       onResult: silent ? undefined : (r, done, total) => {
+        const sec = (r.ms / 1000).toFixed(1)
+        const slow = r.ms > 5000 ? ` \x1b[33m${sec}s\x1b[0m` : ` \x1b[2m${sec}s\x1b[0m`
         if (r.error) {
-          console.log(`  \x1b[31m✗\x1b[0m ${formatSourceName(r.name)} \x1b[2m— ${r.error}\x1b[0m`)
+          console.log(`  \x1b[31m✗\x1b[0m ${formatSourceName(r.name)} \x1b[2m— ${r.error}\x1b[0m${slow}`)
         } else {
           const tag = r.added > 0 ? ` \x1b[32m(${r.added} new)\x1b[0m` : ''
-          console.log(`  \x1b[90m${done}/${total}\x1b[0m ${formatSourceName(r.name)} \x1b[2m— ${r.count}\x1b[0m${tag}`)
+          console.log(`  \x1b[90m${done}/${total}\x1b[0m ${formatSourceName(r.name)} \x1b[2m— ${r.count}\x1b[0m${tag}${slow}`)
         }
       },
     })

@@ -17,6 +17,7 @@ export interface FetchResult {
   name: string
   count: number
   added: number
+  ms: number
   error?: string
 }
 
@@ -34,23 +35,36 @@ export const fetchAll = async (opts?: {
   const results: FetchResult[] = []
   let newItems = 0
 
-  await Promise.allSettled(
-    sources.map(async (source) => {
+  // Concurrency limiter — avoid DNS/TLS congestion from too many simultaneous connections
+  const CONCURRENCY = 12
+  let running = 0
+  const queue = [...sources]
+  const workers: Promise<void>[] = []
+
+  const runNext = async (): Promise<void> => {
+    while (queue.length > 0) {
+      const source = queue.shift()!
+      running++
       const adapter = resolve(source.url)
+      const t0 = Date.now()
       let result: FetchResult
       try {
         const items = await retry(() => adapter.fetch(source), 3, 500)
         const added = store.save(items)
         newItems += added
-        result = { name: source.name, count: items.length, added }
+        result = { name: source.name, count: items.length, added, ms: Date.now() - t0 }
       } catch (e: any) {
-        result = { name: source.name, count: 0, added: 0, error: e?.message ?? String(e) }
+        result = { name: source.name, count: 0, added: 0, ms: Date.now() - t0, error: e?.message ?? String(e) }
       }
+      running--
       results.push(result)
       done++
       opts?.onResult?.(result, done, sources.length)
-    })
-  )
+    }
+  }
+
+  for (let i = 0; i < Math.min(CONCURRENCY, sources.length); i++) workers.push(runNext())
+  await Promise.all(workers)
 
   store.close()
   return { newItems, results }
