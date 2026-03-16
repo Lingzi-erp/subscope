@@ -4,9 +4,9 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 ## What it does
 
-You follow AI companies and academic journals across blogs, X, YouTube, support pages, GitHub releases, RSS feeds. The information is scattered across dozens of URLs. subscope pulls it all into one place, organized by company, filterable by type, searchable, with PDF downloads for papers.
+First-hand information from official sources only — no intermediaries, no aggregators, no SEO-polluted search results. Six intelligence dimensions: AI companies, central banks & financial regulators, global official media, energy agencies, and international organizations.
 
-Currently tracks 6 AI companies (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), 2 photonics journals, 14 economics/finance institutions (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), 17 global news sources (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), plus energy (IEA, EIA) and international orgs (UN, WHO, IAEA, WTO). 58 sources, fetched with 12 concurrent workers in ~3 seconds.
+58 sources across 6 dimensions: AI (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), energy (IEA, EIA), international orgs (UN, WHO, IAEA, WTO). All sources hardcoded in `src/sources.ts`.
 
 ## Quick start
 
@@ -33,10 +33,10 @@ subscope                     # interactive browser with search
 
 ```
 subscope                     # browse items (up/down, enter to open, / to search, g for PDF)
+subscope ai                  # AI company websites (default mode)
 subscope quick               # social media only (X + YouTube)
-subscope formal              # AI + photonics websites (blogs, docs, support)
-subscope eco                 # economics & finance only (14 sources)
-subscope glob                # global news only (17 sources)
+subscope eco                 # economics & finance (14 sources)
+subscope glob                # global news (15 sources)
 subscope --all               # no time filter
 subscope -n 10               # latest 10
 subscope -g ai/anthropic     # filter by group
@@ -63,7 +63,7 @@ subscope glob -j 20 | llm   # feed latest 20 news items as JSON to LLM
 Management:
 
 ```
-subscope config              # interactive TUI (folders, sources, modes)
+subscope config              # interactive TUI (toggle groups/sources on/off)
 subscope group               # list group tree
 subscope group ai on/off     # toggle entire subtree
 subscope auth x              # X/Twitter auth (clipboard)
@@ -110,8 +110,6 @@ ai/
   deepmind    (blog rss, youtube, x)
   deepseek    (changelog, github, x)
   xai         (news, x)
-photonics/
-  (nature photonics, light sci & app)
 econ/
   fed         (Federal Reserve FOMC statements, monetary policy)
   ecb         (European Central Bank press releases, speeches)
@@ -134,7 +132,8 @@ news/
 energy/
   iea, eia
 intl/
-  un, who, iaea, wto
+  un, who, iaea
+  wto         (news via JS data file, not RSS)
 ```
 
 ## Stack

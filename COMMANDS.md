@@ -3,11 +3,11 @@
 ## Reading
 
 ```
-subscope                          interactive browser (default: formal mode, last 14 days)
+subscope                          interactive browser (default: ai mode, last 14 days)
+subscope ai                       AI company websites (default)
 subscope quick                    social media only (X + YouTube)
-subscope formal                   official sources only (blogs, docs, support)
-subscope eco                      economics & finance only (14 econ/* sources)
-subscope glob                     global news only (17 news/* sources)
+subscope eco                      economics & finance (14 econ/* sources)
+subscope glob                     global news (15 news/* sources)
 subscope --all / -a               no time filter
 subscope -n <count>               limit to N items (non-interactive output)
 subscope -g <group>               filter by group (prefix match: -g ai matches ai/*)
@@ -78,13 +78,13 @@ subscope watch-uninstall          remove scheduled task
 
 ## Sources
 
+Sources are hardcoded in `src/sources.ts`. No add/remove from CLI — edit the code.
+
 ```
-subscope add <url>                add source (auto-detects type and group)
-subscope add <url> -g <group>     add to specific group
-subscope rm <id|url>              remove source
 subscope ls                       list all sources with group tags
 subscope on <id>                  activate source
 subscope off <id>                 deactivate source
+subscope toggle <id>              toggle source on/off
 ```
 
 Source IDs are the first 8 chars of the URL's SHA-256 hash.
@@ -108,11 +108,11 @@ subscope mode                     list modes with default indicator
 subscope mode <name>              set default mode
 ```
 
-Built-in modes:
-- `formal` -- source type `website` in `ai/*` + `photonics/*` groups (blogs, docs, changelogs, support)
+Built-in modes (from code, not saved to config):
+- `ai` (default) -- website sources in `ai/*` groups
 - `quick` -- source types `youtube`, `twitter`
-- `eco` -- group prefix `econ` (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC EDGAR, US Treasury, IMF, CSRC, MOF, SAFE, NFRA)
-- `glob` -- group prefix `news` (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu)
+- `eco` -- group prefix `econ` (14 sources: Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA)
+- `glob` -- group prefix `news` (15 sources: BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu)
 
 Modes can filter by source type (`types`) and/or group prefix (`groups`). `-g` flag bypasses mode filtering and shows all source types in that group.
 
@@ -136,39 +136,23 @@ Academic: F12, Network, click any request, copy full Cookie header value.
 subscope config
 ```
 
-### Folder mode (default)
-
 | Key | Action |
 |-----|--------|
 | up/down | navigate |
 | space | toggle on/off (cascades to children) |
 | right | drill into folder |
 | left | go back |
-| s | enter source management |
 | n | new folder |
 | e | rename folder |
 | d | delete empty folder |
 | q | save and quit |
 
-### Source mode (press s)
-
-| Key | Action |
-|-----|--------|
-| up/down | navigate |
-| space | toggle source on/off |
-| a | add source from catalog |
-| e | edit source name |
-| d | delete source |
-| q | back to folder mode |
-
-### Add source (press a in source mode)
-
-Type to search the catalog. Up/down to select. Enter to add. Template sources (YouTube, X, GitHub) prompt for a handle. Pre-defined sources hidden once added.
+Sources are hardcoded — the TUI only toggles groups and individual sources on/off. No add/edit/delete.
 
 ## Files
 
 ```
-~/.subscope/config.yml            sources, groups, modes, folders, active states
+~/.subscope/config.yml            user preferences (active states, default mode)
 ~/.subscope/subscope.db           SQLite feed item cache
 ~/.subscope/auth.yml              X auth_token + academic cookies
 ~/.subscope/seen.json             read tracking for NEW badges

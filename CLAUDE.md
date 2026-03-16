@@ -4,7 +4,7 @@ Project context for AI assistants working on this codebase.
 
 ## What this is
 
-subscope is a personal CLI feed aggregator. It pulls first-hand information from AI companies, academic journals, and economic/financial institutions into one terminal interface. Built for one user, optimized for speed and precision over generality.
+subscope is a personal CLI intelligence feed. It pulls first-hand information from AI companies, central banks, financial regulators, global official media, energy agencies, and international organizations into one terminal interface. Built for one user, optimized for speed and precision over generality.
 
 ## Philosophy
 
@@ -32,7 +32,7 @@ src/
   store.ts                  SQLite CRUD, dedup via INSERT OR IGNORE
   pipeline.ts               Orchestrator: fetch all -> store -> read
   render.ts                 Terminal output, interactive browser, colors
-  interactive.ts            TUI config (folder/source/catalog/text modes)
+  interactive.ts            TUI config (folder toggle, no source management)
   notify.ts                 Windows toast notifications
   adapters/
     index.ts                Adapter registry: URL -> adapter resolution
@@ -60,7 +60,7 @@ src/
       boj.ts                Bank of Japan speeches/press HTML scraper
       apnews.ts             AP News hub page scraper (date from URL slug)
       iaea.ts               IAEA press releases scraper
-      wto.ts                WTO news scraper
+      wto.ts                WTO news via JS data file (/library/news/news_YYYY_e.js)
   sources.ts                Hardcoded source registry (all URLs + groups)
   reader/
     index.ts                Article full-text extractor (core logic + Playwright fallback)
@@ -85,10 +85,10 @@ Fetches `/@handle/videos` page, parses `ytInitialData` JSON from the HTML. Relat
 Website adapter detects RSS/Atom by content-type or XML declaration. Handles `pubDate`, `published`, `updated`, and `dc:date` (Dublin Core, used by Nature journals).
 
 ### Groups
-Path-based strings: `ai/anthropic`, `photonics`. Filtering with `-g ai` matches prefix. `activeGroups` list determines what shows in default view. `folders` list persists empty folders independently of sources.
+Path-based strings: `ai/anthropic`, `econ/fed`, `news/bbc`. Filtering with `-g ai` matches prefix. `activeGroups` list determines what shows in default view. `folders` list persists empty folders independently of sources.
 
 ### Modes
-`formal` = website sources in `ai/*` + `photonics/*`. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). `glob` = global news (`news/*` groups). Modes filter by `types` (source type) AND/OR `groups` (group prefix) — both conditions must pass. `-g` flag bypasses mode filtering. Custom modes configurable in YAML.
+`ai` (default) = website sources in `ai/*`. `quick` = youtube + twitter. `eco` = economics/finance (`econ/*` groups). `glob` = global news (`news/*` groups). Built-in modes always from code, never saved to config.yml. Modes filter by `types` (source type) AND/OR `groups` (group prefix) — both conditions must pass. `-g` flag bypasses mode filtering.
 
 ### Interactive browser
 Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. Search box at top (cursor = -1). NEW badges tracked via `seen.json`. PDF download via URL pattern matching (Nature `.pdf` suffix, arXiv `/pdf/` path).
@@ -97,7 +97,13 @@ Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. S
 Fourteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), BOJ (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA). Each has a dedicated adapter.
 
 ### Global news sources
-Seventeen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (HTML scrape), Al Jazeera (RSS), TASS (RSS), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), CCTV (JSONP API with precise timestamps), Xinhua (HTML scrape), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
+Fifteen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (JSON API), Al Jazeera (RSS), TASS (RSS), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), CCTV (JSONP cmsdatainterface API), Xinhua (HTML scrape, /china/ remapped to /politics/), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
+
+### Energy sources
+Two sources under `energy/`: IEA (HTML scrape from iea.org/news), EIA (HTML scrape from eia.gov/todayinenergy — SPA, auto-detected and rendered via Playwright fallback for reader).
+
+### International organization sources
+Four sources under `intl/`: UN News (RSS), WHO (RSS), IAEA (dedicated adapter scraping h3.card__title links from pressreleases page), WTO (dedicated adapter parsing /library/news/news_YYYY_e.js data file — structured JS objects with titles, summaries, dates).
 
 ### JSON output (`-j`)
 `subscope glob -j 20` outputs clean JSON array: `[{title, source, url, summary, publishedAt}]`. Source names formatted for readability (e.g., "央视网" not "news.cctv.com/world"). Pipe-friendly for LLMs.
@@ -124,15 +130,15 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 
 `~/.subscope/` on all platforms. Contains `config.yml`, `subscope.db`, `auth.yml`, `seen.json`.
 
-## Adding a new source type
+## Adding a new source
 
-1. If the site needs a dedicated adapter, create `src/adapters/sites/<name>.ts`
-2. Export a function matching `(source: Source) => Promise<FeedItem[]>`
-3. Register in `src/adapters/index.ts` siteRules array (host + optional path prefix)
-4. Update `inferGroup` in `config.ts` if URL patterns need auto-group assignment
-5. Update `sourceColor` in `render.ts` for brand color
+1. Add entry to `src/sources.ts` registry (URL + group)
+2. If the site needs a dedicated adapter, create `src/adapters/sites/<name>.ts` and register in `src/adapters/index.ts`
+3. Add reader rule in `src/reader/econ.ts`, `news.ts`, or `ai.ts` for `subscope read` support
+4. Add brand color in `render.ts` BRAND array and display name in DISPLAY array
+5. Test both `subscope fetch -g <group>` and `subscope read <article_url>`
 
-If the site has RSS or standard HTML, the generic website adapter handles it automatically. No new code needed.
+If the site has RSS or standard HTML, the generic website adapter handles it automatically. No new adapter code needed, but reader rules and colors still required.
 
 ## Adding a new generic adapter
 
