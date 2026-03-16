@@ -1,6 +1,6 @@
 import { load, save, type Config } from './config.ts'
-import { sourceId, groupMatches } from './lib.ts'
-import type { Source, SourceType } from './types.ts'
+import { groupMatches } from './lib.ts'
+import type { Source } from './types.ts'
 
 // ── ANSI (shared names with render.ts) ──
 
@@ -16,43 +16,17 @@ const BG_BAR = '\x1b[48;5;236m'
 const cols = () => process.stdout.columns || 80
 const rows = () => process.stdout.rows || 24
 
-// ── Source catalog ──
-
-interface CatalogEntry {
-  label: string; type: SourceType; url?: string; template?: string; placeholder?: string
-}
-
-const CATALOG: CatalogEntry[] = [
-  { label: 'Anthropic Blog', type: 'website', url: 'https://www.anthropic.com/blog' },
-  { label: 'Anthropic Research', type: 'website', url: 'https://www.anthropic.com/research' },
-  { label: 'Anthropic Engineering', type: 'website', url: 'https://www.anthropic.com/engineering' },
-  { label: 'Claude Blog', type: 'website', url: 'https://www.claude.com/blog' },
-  { label: 'Claude Release Notes', type: 'website', url: 'https://support.claude.com/en/articles/12138966-release-notes' },
-  { label: 'Claude Usage & Limits', type: 'website', url: 'https://support.claude.com/en/collections/18031876-usage-and-limits' },
-  { label: 'OpenAI News', type: 'website', url: 'https://openai.com/news/rss.xml' },
-  { label: 'DeepMind Blog', type: 'website', url: 'https://deepmind.google/blog/rss.xml' },
-  { label: 'DeepSeek Changelog', type: 'website', url: 'https://api-docs.deepseek.com/updates' },
-  { label: 'xAI News', type: 'website', url: 'https://x.ai/news' },
-  { label: 'YouTube Channel', type: 'youtube', template: 'https://www.youtube.com/@{handle}', placeholder: 'handle (e.g. anthropic-ai)' },
-  { label: 'X / Twitter Account', type: 'twitter', template: 'https://x.com/{handle}', placeholder: 'handle (e.g. AnthropicAI)' },
-  { label: 'GitHub Org / Repo', type: 'website', template: 'https://github.com/{handle}', placeholder: 'org or org/repo' },
-  { label: 'Custom RSS / Website', type: 'website', template: '{handle}', placeholder: 'full URL' },
-]
-
 // ── State machine ──
 
 type Mode =
   | { kind: 'folders' }
-  | { kind: 'sources'; cursor: number }
-  | { kind: 'text'; purpose: 'new-folder' | 'rename-folder' | 'add-handle'; buf: string; meta?: any }
-  | { kind: 'catalog'; search: string; cursor: number }
+  | { kind: 'text'; purpose: 'new-folder' | 'rename-folder'; buf: string; meta?: any }
 
 export const interactiveConfig = (): Promise<void> => {
   const cfg = load()
   const nav: { path: string; cursor: number }[] = [{ path: '', cursor: 0 }]
   let mode: Mode = { kind: 'folders' }
   let dirty = false
-  let filteredCatalog: CatalogEntry[] = []
 
   const cur = () => nav[nav.length - 1]!
 
@@ -180,55 +154,11 @@ export const interactiveConfig = (): Promise<void> => {
         lines.push(` ${ptr} ${ico} ${lbl}${tag}${arrow}`)
       }
       render(lines, path
-        ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  s sources  n new  e rename  d del  q save'
-        : '\u2191\u2193 move  space toggle  \u2192 open  s sources  n new  e rename  d del  q save')
-
-    } else if (mode.kind === 'sources') {
-      lines.push(`  ${BOLD}Sources${RESET} ${DIM}in ${path || '/'}${RESET}`)
-      lines.push('')
-      const srcs = sourcesIn(path)
-      if (srcs.length === 0) lines.push(`  ${DIM}No sources. Press a to add.${RESET}`)
-      for (let i = 0; i < srcs.length; i++) {
-        const s = srcs[i]!
-        const sel = i === mode.cursor
-        const ptr = sel ? `${CYAN}\u203a${RESET}` : ' '
-        const ico = s.active ? `${CYAN}\u25cf${RESET}` : `${GRAY}\u25cb${RESET}`
-        const lbl = sel ? `${BOLD}${s.name}${RESET}` : s.name
-        lines.push(` ${ptr} ${ico} ${lbl}  ${DIM}${s.type}${RESET}`)
-        lines.push(`       ${DIM}${s.url}${RESET}`)
-      }
-      render(lines, '\u2191\u2193 move  space toggle  a add  e edit  d delete  q back')
-
-    } else if (mode.kind === 'catalog') {
-      lines.push(`  ${BOLD}Add source${RESET}  ${DIM}type to search${RESET}`)
-      lines.push(`  ${DIM}Search:${RESET} ${YELLOW}${mode.search}\u2588${RESET}`)
-      lines.push('')
-      const existing = new Set(cfg.sources.map(s => s.url))
-      const search = mode.search
-      const filtered = CATALOG.filter(e => {
-        if (e.url && existing.has(e.url)) return false
-        if (!search) return true
-        return e.label.toLowerCase().includes(search.toLowerCase())
-      })
-      for (let i = 0; i < filtered.length; i++) {
-        const e = filtered[i]!
-        const sel = i === mode.cursor
-        const ptr = sel ? `${CYAN}\u203a${RESET}` : ' '
-        const ico = e.template ? `${DIM}\u2026${RESET}` : `${CYAN}+${RESET}`
-        const lbl = sel ? `${BOLD}${e.label}${RESET}` : e.label
-        const hint = e.template ? `  ${DIM}${e.placeholder}${RESET}` : `  ${DIM}${e.url?.replace('https://', '')}${RESET}`
-        lines.push(` ${ptr} ${ico} ${lbl}${hint}`)
-      }
-      if (filtered.length === 0) lines.push(`  ${DIM}No matches${RESET}`)
-      // Store filtered list for key handler
-      filteredCatalog = filtered
-      render(lines, '\u2191\u2193 select  enter confirm  q cancel')
+        ? '\u2191\u2193 move  space toggle  \u2192 open  \u2190 back  n new  e rename  d del  q save'
+        : '\u2191\u2193 move  space toggle  \u2192 open  n new  e rename  d del  q save')
 
     } else if (mode.kind === 'text') {
-      const label = mode.purpose === 'new-folder' ? 'New folder'
-        : mode.purpose === 'rename-folder' ? 'Rename'
-        : mode.purpose === 'add-handle' ? (mode.meta?.placeholder ?? 'Input')
-        : 'Input'
+      const label = mode.purpose === 'new-folder' ? 'New folder' : 'Rename'
       lines.push(`  ${BOLD}${label}${RESET}`)
       lines.push('')
       lines.push(`  ${YELLOW}${mode.buf}\u2588${RESET}`)
@@ -284,7 +214,6 @@ export const interactiveConfig = (): Promise<void> => {
           return
         }
         if (left) { if (nav.length > 1) { nav.pop(); draw() }; return }
-        if (key === 's') { mode = { kind: 'sources', cursor: 0 }; draw(); return }
         if (key === 'n') { mode = { kind: 'text', purpose: 'new-folder', buf: '' }; draw(); return }
         if (key === 'e') {
           const r = rows[cur().cursor]
@@ -309,55 +238,6 @@ export const interactiveConfig = (): Promise<void> => {
         return
       }
 
-      // ── SOURCES ──
-      if (mode.kind === 'sources') {
-        const srcs = sourcesIn(cur().path)
-        if (up) { mode.cursor = Math.max(0, mode.cursor - 1); draw(); return }
-        if (down) { mode.cursor = Math.min(srcs.length - 1, mode.cursor + 1); draw(); return }
-        if (key === ' ') { const s = srcs[mode.cursor]; if (s) { s.active = !s.active; dirty = true; draw() }; return }
-        if (key === 'a') { mode = { kind: 'catalog', search: '', cursor: 0 }; draw(); return }
-        if (key === 'e') {
-          const s = srcs[mode.cursor]
-          if (s) mode = { kind: 'text', purpose: 'add-handle', buf: s.name, meta: { editId: s.id } }
-          draw(); return
-        }
-        if (key === 'd') {
-          const s = srcs[mode.cursor]
-          if (s) {
-            cfg.sources = cfg.sources.filter(x => x.id !== s.id)
-            dirty = true
-            mode.cursor = Math.min(mode.cursor, Math.max(0, sourcesIn(cur().path).length - 1))
-          }
-          draw(); return
-        }
-        if (key === 'q' || ctrlc) { mode = { kind: 'folders' }; draw(); return }
-        return
-      }
-
-      // ── CATALOG ──
-      if (mode.kind === 'catalog') {
-        const filtered = filteredCatalog
-        if (up) { mode.cursor = Math.max(0, mode.cursor - 1); draw(); return }
-        if (down) { mode.cursor = Math.min(filtered.length - 1, mode.cursor + 1); draw(); return }
-        if (enter) {
-          const entry = filtered[mode.cursor]
-          if (entry?.url) {
-            const group = cur().path || 'ungrouped'
-            const src = mkSource(entry, entry.url, group)
-            if (!cfg.sources.some(s => s.url === src.url)) { cfg.sources.push(src); dirty = true }
-            mode = { kind: 'sources', cursor: 0 }
-          } else if (entry?.template) {
-            mode = { kind: 'text', purpose: 'add-handle', buf: '', meta: { entry } }
-          }
-          draw(); return
-        }
-        if (backspace) { mode.search = mode.search.slice(0, -1); mode.cursor = 0; draw(); return }
-        if (key === 'q' || ctrlc) { mode = { kind: 'sources', cursor: 0 }; draw(); return }
-        // In catalog, typing filters — don't use j/k for navigation (conflicts with search)
-        if (printable && key !== 'j' && key !== 'k') { mode.search += key; mode.cursor = 0; draw(); return }
-        return
-      }
-
       // ── TEXT INPUT ──
       if (mode.kind === 'text') {
         const m = mode
@@ -377,24 +257,13 @@ export const interactiveConfig = (): Promise<void> => {
               cfg.activeGroups = cfg.activeGroups.map(rn)
               cfg.sources.forEach(s => { s.group = rn(s.group) })
               dirty = true
-            } else if (m.purpose === 'add-handle' && m.meta?.entry) {
-              const handle = val.replace(/^@/, '')
-              const url = m.meta.entry.template.replace('{handle}', handle)
-              const group = cur().path || 'ungrouped'
-              const src = mkSource(m.meta.entry, url, group)
-              if (!cfg.sources.some(s => s.url === src.url)) { cfg.sources.push(src); dirty = true }
-            } else if (m.purpose === 'add-handle' && m.meta?.editId) {
-              const src = cfg.sources.find(s => s.id === m.meta.editId)
-              if (src) { src.name = val; dirty = true }
             }
           }
-          mode = m.purpose === 'new-folder' || m.purpose === 'rename-folder'
-            ? { kind: 'folders' } : { kind: 'sources', cursor: 0 }
+          mode = { kind: 'folders' }
           draw(); return
         }
         if (key === 'q' && m.buf === '' || ctrlc) {
-          mode = m.purpose === 'new-folder' || m.purpose === 'rename-folder'
-            ? { kind: 'folders' } : { kind: 'sources', cursor: 0 }
+          mode = { kind: 'folders' }
           draw(); return
         }
         if (backspace) { m.buf = m.buf.slice(0, -1); draw(); return }
@@ -407,14 +276,3 @@ export const interactiveConfig = (): Promise<void> => {
   })
 }
 
-const mkSource = (entry: CatalogEntry, url: string, group: string): Source => {
-  const parsed = new URL(url)
-  const host = parsed.hostname.replace('www.', '')
-  const path = parsed.pathname.replace(/\/+$/, '')
-  return {
-    id: sourceId(url),
-    url, type: entry.type, group, active: true,
-    name: path && path !== '/' ? `${host}${path}` : host,
-    addedAt: new Date().toISOString(),
-  }
-}

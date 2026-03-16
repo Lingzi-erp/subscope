@@ -1,15 +1,14 @@
 #!/usr/bin/env bun
 
-import { load, save, addSource, removeSource, inferGroup } from './config.ts'
+import { load, save } from './config.ts'
 import { createStore } from './store.ts'
 import { fetchAll, read, type ReadOpts } from './pipeline.ts'
 import type { SourceType } from './types.ts'
-import { detectType } from './adapters/index.ts'
 import { renderFeed, renderInteractive, renderSources, renderGroups, formatSourceName } from './render.ts'
 import { interactiveConfig } from './interactive.ts'
 import { notify } from './notify.ts'
 import { readArticle } from './reader/index.ts'
-import { sourceId, DIR, groupMatches } from './lib.ts'
+import { DIR, groupMatches } from './lib.ts'
 
 import { join } from 'path'
 import { homedir } from 'os'
@@ -46,52 +45,7 @@ const readClipboard = (): string => {
 // ── Commands ──
 
 const commands: Record<string, () => Promise<void>> = {
-  add: async () => {
-    let group: string | undefined
-    const filteredArgs: string[] = []
-    for (let i = 0; i < args.length; i++) {
-      if ((args[i] === '-g' || args[i] === '--group') && args[i + 1]) group = args[++i]!
-      else filteredArgs.push(args[i]!)
-    }
-
-    const url = filteredArgs[0]
-    if (!url) { console.error('Usage: subscope add <url> [-g group]'); process.exit(1) }
-
-    let parsed: URL
-    try { parsed = new URL(url) } catch { console.error(`Invalid URL: ${url}`); process.exit(1) }
-
-    const config = load()
-    if (config.sources.some(s => s.url === parsed.href)) { console.log('Source already exists.'); return }
-
-    const type = detectType(parsed.href)
-    const host = parsed.hostname.replace('www.', '')
-    const path = parsed.pathname.replace(/\/+$/, '')
-    const name = path && path !== '/' ? `${host}${path}` : host
-
-    const source: Source = {
-      id: sourceId(parsed.href), url: parsed.href, type, name,
-      group: group ?? inferGroup(parsed.href),
-      active: true, addedAt: new Date().toISOString(),
-    }
-
-    save(addSource(config, source))
-    console.log(`\n  Added: ${name} → [${source.group}]\n`)
-  },
-
   ls: async () => renderSources(load().sources),
-
-  rm: async () => {
-    const target = args[0]
-    if (!target) { console.error('Usage: subscope rm <id|url>'); process.exit(1) }
-    const config = load()
-    const source = config.sources.find(s => s.id === target || s.url === target)
-    if (!source) { console.error('Source not found.'); process.exit(1) }
-    save(removeSource(config, source.id))
-    const store = createStore()
-    store.removeBySource(source.id)
-    store.close()
-    console.log(`\n  Removed: ${source.name}\n`)
-  },
 
   fetch: async () => {
     const config = load()
@@ -223,6 +177,17 @@ Write-Output "ok"
     if (!source) { console.error('Source not found.'); process.exit(1) }
     source.active = false; save(config)
     console.log(`\n  Deactivated: ${source.name}\n`)
+  },
+
+  // Alias: subscope toggle <id>
+  toggle: async () => {
+    const target = args[0]
+    if (!target) { console.error('Usage: subscope toggle <id>'); process.exit(1) }
+    const config = load()
+    const source = config.sources.find(s => s.id === target)
+    if (!source) { console.error('Source not found.'); process.exit(1) }
+    source.active = !source.active; save(config)
+    console.log(`\n  ${source.active ? 'Activated' : 'Deactivated'}: ${source.name}\n`)
   },
 
   config: async () => { await interactiveConfig() },

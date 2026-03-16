@@ -1,7 +1,9 @@
 import { parse, stringify } from 'yaml'
 import { join } from 'path'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'fs'
-import { DIR, groupMatches } from './lib.ts'
+import { DIR, groupMatches, sourceId } from './lib.ts'
+import { SOURCE_REGISTRY } from './sources.ts'
+import { detectType } from './adapters/index.ts'
 import type { Source } from './types.ts'
 
 export type ModeName = 'formal' | 'quick' | string
@@ -32,119 +34,65 @@ const ensureDir = () => {
   if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
 }
 
+// Build sources from hardcoded registry, overlay active state from config
+const buildSources = (savedStates?: Record<string, boolean>): Source[] => {
+  return SOURCE_REGISTRY.map(def => {
+    const id = sourceId(def.url)
+    const parsed = new URL(def.url)
+    const host = parsed.hostname.replace('www.', '')
+    const path = parsed.pathname.replace(/\/+$/, '')
+    const name = path && path !== '/' ? `${host}${path}` : host
+    const type = def.type ?? detectType(def.url)
+    const active = savedStates?.[id] ?? true
+    return { id, url: def.url, type, name, group: def.group, active, addedAt: '' }
+  })
+}
+
 export const load = (): Config => {
   ensureDir()
-  if (!existsSync(CONFIG_FILE)) return { activeGroups: [], folders: [], defaultMode: 'formal', modes: DEFAULT_MODES, sources: [] }
-  const raw = parse(readFileSync(CONFIG_FILE, 'utf-8')) as any
-  // Migrate: old configs + flat groups → nested groups
-  const migrateGroup = (g: string) => {
-    if (g.includes('/')) return g // already nested
-    const map: Record<string, string> = {
-      anthropic: 'ai/anthropic', claude: 'ai/claude', openai: 'ai/openai',
-      deepmind: 'ai/deepmind', deepseek: 'ai/deepseek', xai: 'ai/xai',
-    }
-    return map[g] ?? g
-  }
-  const sources: Source[] = (raw?.sources ?? []).map((s: any) => ({
-    ...s,
-    group: migrateGroup(s.group ?? inferGroup(s.url)),
-    active: s.active ?? true,
-  }))
-  const rawGroups: string[] = raw?.activeGroups ?? [...new Set(sources.map(s => s.group))]
-  const activeGroups = rawGroups.map(migrateGroup)
-  // Folders: all unique group paths (from sources + activeGroups + explicit folders)
-  const allPaths = new Set([
-    ...sources.map(s => s.group),
-    ...activeGroups,
-    ...((raw?.folders ?? []) as string[]).map(migrateGroup),
-  ])
-  // Also add parent paths (e.g. "ai" from "ai/anthropic")
+  const raw = existsSync(CONFIG_FILE) ? parse(readFileSync(CONFIG_FILE, 'utf-8')) as any : null
+
+  // Restore per-source active states
+  const savedStates: Record<string, boolean> = {}
+  for (const s of (raw?.sources ?? []) as any[])
+    if (s.id && s.active !== undefined) savedStates[s.id] = s.active
+
+  const sources = buildSources(savedStates)
+  const allGroups = [...new Set(sources.map(s => s.group))]
+  const activeGroups: string[] = raw?.activeGroups ?? allGroups
+
+  // Folders: all group paths + parents
+  const allPaths = new Set([...allGroups, ...activeGroups, ...((raw?.folders ?? []) as string[])])
   for (const p of [...allPaths]) {
     const parts = p.split('/')
-    for (let i = 1; i < parts.length; i++) {
-      allPaths.add(parts.slice(0, i).join('/'))
-    }
+    for (let i = 1; i < parts.length; i++) allPaths.add(parts.slice(0, i).join('/'))
   }
-  const folders = [...allPaths].sort()
+
   const defaultMode: ModeName = raw?.defaultMode ?? 'formal'
-  // Built-in modes from code, custom modes from config
   const customModes = (raw?.modes ?? {}) as Record<string, ModeConfig>
   const modes: Record<string, ModeConfig> = { ...DEFAULT_MODES }
   for (const [name, cfg] of Object.entries(customModes))
     if (!(name in DEFAULT_MODES)) modes[name] = cfg
-  return { activeGroups, folders, defaultMode, modes, sources }
+
+  return { activeGroups, folders: [...allPaths].sort(), defaultMode, modes, sources }
 }
 
 export const save = (config: Config): void => {
   ensureDir()
-  // Strip built-in modes — they always come from code
   const customModes: Record<string, ModeConfig> = {}
   for (const [name, cfg] of Object.entries(config.modes))
     if (!(name in DEFAULT_MODES)) customModes[name] = cfg
-  writeFileSync(CONFIG_FILE, stringify({ ...config, modes: Object.keys(customModes).length ? customModes : undefined }))
-}
-
-export const addSource = (config: Config, source: Source): Config => {
-  const sources = [...config.sources, source]
-  const activeGroups = config.activeGroups.includes(source.group)
-    ? config.activeGroups
-    : [...config.activeGroups, source.group]
-  return { ...config, activeGroups, sources }
-}
-
-export const removeSource = (config: Config, id: string): Config => ({
-  ...config,
-  sources: config.sources.filter(s => s.id !== id),
-})
-
-// Auto-infer group from URL hostname
-export const inferGroup = (url: string): string => {
-  const { hostname, pathname } = new URL(url)
-  // YouTube / X / GitHub: infer from handle/org
-  if (hostname.includes('youtube.com') || hostname.includes('twitter.com') || hostname.includes('x.com') || hostname === 'github.com') {
-    const handle = pathname.match(/@?([\w-]+)/)?.[1]?.toLowerCase() ?? ''
-    if (handle.includes('anthropic')) return 'ai/anthropic'
-    if (handle.includes('claude')) return 'ai/claude'
-    if (handle.includes('deepseek')) return 'ai/deepseek'
-    if (handle.includes('openai')) return 'ai/openai'
-    if (handle.includes('deepmind')) return 'ai/deepmind'
-    if (handle.includes('xai') || handle.includes('grok')) return 'ai/xai'
-    return handle || hostname.split('.')[0]!
-  }
-  if (hostname.includes('anthropic.com')) return 'ai/anthropic'
-  if (hostname.includes('claude')) return 'ai/claude'
-  if (hostname.includes('deepseek')) return 'ai/deepseek'
-  if (hostname.includes('openai.com')) return 'ai/openai'
-  if (hostname.includes('deepmind')) return 'ai/deepmind'
-  if (hostname === 'x.ai') return 'ai/xai'
-  // Economics & Finance
-  if (hostname.includes('federalreserve.gov')) return 'econ/fed'
-  if (hostname.includes('pbc.gov.cn')) return 'econ/pboc'
-  if (hostname.includes('stats.gov.cn')) return 'econ/nbs'
-  if (hostname.includes('sec.gov')) return 'econ/sec'
-  if (hostname.includes('bls.gov')) return 'econ/bls'
-  if (hostname.includes('bea.gov')) return 'econ/bea'
-  if (hostname.includes('ecb.europa.eu')) return 'econ/ecb'
-  if (hostname.includes('treasury.gov')) return 'econ/treasury'
-  if (hostname.includes('imf.org')) return 'econ/imf'
-  if (hostname.includes('mof.gov.cn')) return 'econ/mof'
-  if (hostname.includes('safe.gov.cn')) return 'econ/safe'
-  if (hostname.includes('nfra.gov.cn')) return 'econ/nfra'
-  if (hostname.includes('csrc.gov.cn')) return 'econ/csrc'
-  // Global news
-  if (hostname.includes('bbc.co.uk') || hostname.includes('bbc.com') || hostname.includes('bbci.co.uk')) return 'news/bbc'
-  if (hostname.includes('france24.com')) return 'news/france24'
-  if (hostname.includes('dw.com') || hostname.includes('dw.de')) return 'news/dw'
-  if (hostname.includes('nhk.or.jp')) return 'news/nhk'
-  if (hostname.includes('aljazeera.com')) return 'news/aljazeera'
-  if (hostname.includes('people.com.cn')) return 'news/people'
-  if (hostname.includes('news.cctv.com')) return 'news/cctv'
-  if (hostname.includes('news.cn') || hostname.includes('xinhuanet.com')) return 'news/xinhua'
-  if (hostname.includes('tass.com')) return 'news/tass'
-  if (hostname.includes('yna.co.kr')) return 'news/yonhap'
-  if (hostname.includes('abc.net.au')) return 'news/abc-au'
-  if (hostname.includes('cbc.ca')) return 'news/cbc'
-  return hostname.replace('www.', '').split('.')[0]!
+  // Only save user preferences: active states, activeGroups, defaultMode
+  const sourceStates = config.sources
+    .filter(s => !s.active) // only save disabled sources (active=true is default)
+    .map(s => ({ id: s.id, active: false }))
+  writeFileSync(CONFIG_FILE, stringify({
+    activeGroups: config.activeGroups,
+    defaultMode: config.defaultMode,
+    folders: config.folders,
+    sources: sourceStates.length ? sourceStates : undefined,
+    modes: Object.keys(customModes).length ? customModes : undefined,
+  }))
 }
 
 // Get sources that should be fetched/displayed
