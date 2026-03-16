@@ -90,6 +90,7 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   // ── Energy ──
   S('https://www.iea.org/news', 'energy/iea'),
   S('https://www.eia.gov/todayinenergy/', 'energy/eia'),
+  S('https://www.energy.gov/newsroom', 'energy/doe'),
 
   // ── International Organizations ──
   S('https://news.un.org/feed/subscribe/en/news/all/rss.xml', 'intl/un'),
