@@ -1,52 +1,33 @@
 import * as cheerio from 'cheerio'
-import { item, sortDesc } from '../../lib.ts'
+import { item, sortDesc, UA } from '../../lib.ts'
 import type { Source, FeedItem } from '../../types.ts'
 
 const BASE = 'https://www.anthropic.com'
+// Anthropic uses Sanity CMS — GROQ API returns clean JSON, ~1KB vs 350KB RSC HTML
+const SANITY = 'https://4zrzovbb.api.sanity.io/v2024-01-01/data/query/website'
+const QUERY = '*[_type == "post"] | order(publishedOn desc) [0...50] { title, slug, publishedOn, summary, "dir": directories[0].value }'
 
 export const fetchAnthropic = async (source: Source): Promise<FeedItem[]> => {
-  const html = await fetch(source.url).then(r => r.text())
+  if (source.url.includes('/engineering')) return fetchEngineering(source)
 
-  if (source.url.includes('/engineering')) {
-    return parseEngineering(html, source)
-  }
-  return parseRSC(html, source)
+  const dir = source.url.includes('/research') ? 'research' : 'news'
+  const pathPrefix = dir === 'research' ? '/research/' : '/news/'
+
+  const res = await fetch(`${SANITY}?query=${encodeURIComponent(QUERY)}`, { headers: { 'User-Agent': UA } })
+  if (!res.ok) throw new Error(`Sanity API: ${res.status}`)
+  const json = (await res.json()) as any
+
+  return sortDesc((json.result || [])
+    .filter((r: any) => r.dir === dir && r.title && r.slug?.current)
+    .map((r: any) => item(source, `${BASE}${pathPrefix}${r.slug.current}`, r.title, {
+      summary: r.summary || undefined,
+      publishedAt: r.publishedOn ? new Date(r.publishedOn).toISOString() : undefined,
+    })))
 }
 
-// /blog, /research: data lives in RSC JSON payload
-const parseRSC = (html: string, source: Source): FeedItem[] => {
-  const items: FeedItem[] = []
-  const seen = new Set<string>()
-  const pathPrefix = source.url.includes('/research') ? '/research/' : '/news/'
-
-  let pos = 0
-  while ((pos = html.indexOf('publishedOn', pos + 1)) !== -1) {
-    const window = html.slice(pos, pos + 1500)
-
-    // RSC payload: publishedOn followed by ISO date within a few chars
-    const date = window.match(/publishedOn.{3,6}?(\d{4}-\d{2}-\d{2}T[\d:.]+Z)/)?.[1]
-    // slug → current → "the-actual-slug" (RSC nested JSON structure)
-    const slug = window.match(/slug.*?current.{3,6}?([\w-]+)/)?.[1]
-    // RSC escaped JSON: title\":\""Some Title\""
-    const title = window.match(/title\\*":\\*"(.+?)\\*"/)?.[1]
-    // summary can be null or an escaped string in the same format
-    const summaryMatch = window.match(/summary\\*":(null|\\*"(.+?)\\*")/)
-    const summary = summaryMatch?.[1] === 'null' ? undefined : summaryMatch?.[2]
-
-    if (!date || !slug || !title || seen.has(slug)) continue
-    seen.add(slug)
-
-    items.push(item(source, `${BASE}${pathPrefix}${slug}`, clean(title), {
-      summary: summary ? clean(summary) : undefined,
-      publishedAt: new Date(date).toISOString(),
-    }))
-  }
-
-  return sortDesc(items)
-}
-
-// /engineering: rendered HTML with <article> elements
-const parseEngineering = (html: string, source: Source): FeedItem[] => {
+// /engineering: rendered HTML with <article> elements — no Sanity directory for this
+const fetchEngineering = async (source: Source): Promise<FeedItem[]> => {
+  const html = await fetch(source.url, { headers: { 'User-Agent': UA } }).then(r => r.text())
   const $ = cheerio.load(html)
   const seen = new Set<string>()
 
@@ -64,7 +45,6 @@ const parseEngineering = (html: string, source: Source): FeedItem[] => {
     })
   })
 
-  // Undated articles get timestamps just after the earliest dated one
   const firstDated = articles.find(a => a.dateText)
   const fallbackBase = firstDated ? new Date(firstDated.dateText).getTime() : Date.now()
   let undatedOffset = 0
@@ -74,11 +54,7 @@ const parseEngineering = (html: string, source: Source): FeedItem[] => {
       ? new Date(a.dateText).toISOString()
       : new Date(fallbackBase + ++undatedOffset * 1000).toISOString()
     return item(source, `${BASE}${a.href}`, a.title, {
-      summary: a.summary || undefined,
-      publishedAt,
+      summary: a.summary || undefined, publishedAt,
     })
   }))
 }
-
-const clean = (s: string) =>
-  s.replace(/\\+"/g, '').replace(/\\+n/g, ' ').replace(/\s+/g, ' ').trim()
