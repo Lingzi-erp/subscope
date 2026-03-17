@@ -109,6 +109,7 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   S('https://www.who.int/rss-feeds/news-english.xml', 'intl/who'),
   S('https://www.iaea.org/newscenter/pressreleases', 'intl/iaea'),
   S('https://www.wto.org/english/news_e/news_e.htm', 'intl/wto'),
+  S('https://search.worldbank.org/api/v2/news?format=json&rows=25&lang_exact=English&os=0', 'intl/worldbank'),
 
   // ── International Organizations ── (continued)
   S('https://www.nato.int/content/nato/en/news-and-events/articles/news/jcr:content/root/container/general_search.search.json', 'intl/nato'),

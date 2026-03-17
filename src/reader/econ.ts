@@ -233,6 +233,12 @@ export const econRules: SiteRule[] = [
     title: 'h1',
   },
   {
+    test: u => u.includes('worldbank.org'),
+    selector: 'article.lp__body_content, .lp__body_content, article',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[-–—|]\s*(World Bank( Group)?|The World Bank)$/, '').trim(),
+  },
+  {
     test: u => u.includes('wto.org'),
     selector: '.centerCol',
     title: 'h1, title',
