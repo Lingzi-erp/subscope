@@ -31,6 +31,7 @@ import { fetchFTC } from './sites/ftc.ts'
 import { fetchEU } from './sites/eu.ts'
 import { fetchOPEC } from './sites/opec.ts'
 import { fetchIRENA } from './sites/irena.ts'
+import { fetchTASS } from './sites/tass.ts'
 import type { SourceAdapter, SourceType } from '../types.ts'
 
 // Site-specific adapters — matched by (hostname, pathPrefix)
@@ -66,6 +67,7 @@ const siteRules: { host: string; path?: string; fetch: SourceAdapter['fetch'] }[
   { host: 'ec.europa.eu', path: '/commission/presscorner/', fetch: fetchEU },
   { host: 'opec.org', fetch: fetchOPEC },
   { host: 'irena.org', fetch: fetchIRENA },
+  { host: 'tass.com', fetch: fetchTASS },
 ]
 
 const matchSite = (url: string): SourceAdapter['fetch'] | undefined => {

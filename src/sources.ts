@@ -78,7 +78,7 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   S('https://rss.dw.com/rdf/rss-en-all', 'news/dw'),
   S('https://www3.nhk.or.jp/nhkworld/en/news/', 'news/nhk'),
   S('https://www.aljazeera.com/xml/rss/all.xml', 'news/aljazeera'),
-  S('https://tass.com/rss/v2.xml', 'news/tass'),
+  S('https://tass.com', 'news/tass'),
   S('https://en.yna.co.kr/RSS/news.xml', 'news/yonhap'),
   S('https://www.abc.net.au/news/feed/45910/rss.xml', 'news/abc-au'),
   S('https://rss.cbc.ca/lineup/world.xml', 'news/cbc'),
