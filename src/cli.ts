@@ -9,7 +9,7 @@ import { interactiveConfig } from './interactive.ts'
 import { notify } from './notify.ts'
 import { readArticle } from './reader/index.ts'
 import { DIR, groupMatches } from './lib.ts'
-import { startServer, getServerPort, proxyFetch } from './serve.ts'
+import { startServer, getServerPort, ensureServe, proxyFetch } from './serve.ts'
 
 import { join } from 'path'
 import { homedir } from 'os'
@@ -61,9 +61,9 @@ const commands: Record<string, () => Promise<void>> = {
 
     const start = Date.now()
 
-    // Try proxying to running server (warm connections)
-    const serverPort = getServerPort()
-    if (serverPort) {
+    // Auto-start serve if not running, then proxy through it
+    try {
+      const serverPort = await ensureServe()
       const proxied = await proxyFetch(serverPort, { group })
       if (proxied) {
         const { newItems, results } = proxied
@@ -85,6 +85,8 @@ const commands: Record<string, () => Promise<void>> = {
         }
         return
       }
+    } catch {
+      // Serve unavailable, fall through to direct fetch
     }
 
     // Direct fetch (cold)
