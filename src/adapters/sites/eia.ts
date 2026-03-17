@@ -5,7 +5,7 @@ import type { Source, FeedItem } from '../../types.ts'
 const BASE = 'https://www.eia.gov/todayinenergy/'
 
 export const fetchEIA = async (source: Source): Promise<FeedItem[]> => {
-  const $ = cheerio.load(fetchWithCffi(source.url))
+  const $ = cheerio.load(await fetchWithCffi(source.url))
   const items: FeedItem[] = []
 
   $('.tie-article').each((_, el) => {

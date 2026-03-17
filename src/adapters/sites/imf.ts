@@ -5,7 +5,7 @@ import type { Source, FeedItem } from '../../types.ts'
 const BASE = 'https://www.imf.org'
 
 export const fetchIMF = async (source: Source): Promise<FeedItem[]> => {
-  const $ = cheerio.load(fetchWithCffi(source.url))
+  const $ = cheerio.load(await fetchWithCffi(source.url))
   const items: FeedItem[] = []
   const seen = new Set<string>()
 

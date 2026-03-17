@@ -60,8 +60,8 @@ export const dateOnlyToISO = (y: string, m: string, d: string, tz = '+08:00'): s
 
 /** Universal page fetch — cffi (Safari TLS) first, Bun fetch fallback.
  *  Use this for all HTML fetching. Returns HTML string. */
-export const fetchPage = (url: string): string => {
-  try { return fetchWithCffi(url) } catch {}
+export const fetchPage = async (url: string): Promise<string> => {
+  try { return await fetchWithCffi(url) } catch {}
   // Fallback: Bun native fetch (sync via spawnSync to keep API consistent)
   const r = Bun.spawnSync(['bun', '-e', `
     const res = await fetch(${JSON.stringify(url)}, {
@@ -76,20 +76,27 @@ export const fetchPage = (url: string): string => {
 }
 
 /** Fetch via curl_cffi (Python) — impersonates Safari/Chrome TLS fingerprint.
- *  Bypasses Azure WAF and other advanced bot detection that checks JA3/JA4. */
-export const fetchWithCffi = (url: string, impersonate = 'safari17_0'): string => {
+ *  Bypasses Azure WAF and other advanced bot detection that checks JA3/JA4.
+ *  ASYNC: uses Bun.spawn (not spawnSync) to avoid blocking the event loop. */
+export const fetchWithCffi = async (url: string, impersonate = 'safari17_0'): Promise<string> => {
   const script = join(import.meta.dir, 'cffi_fetch.py')
-  const r = Bun.spawnSync(['python', script, url, impersonate], {
-    stdout: 'pipe', stderr: 'pipe', timeout: 20_000,
+  const proc = Bun.spawn(['python', script, url, impersonate], {
+    stdout: 'pipe', stderr: 'pipe',
   })
-  if (r.exitCode !== 0) throw new Error(`cffi_fetch failed: ${new TextDecoder().decode(r.stderr).trim()}`)
-  return new TextDecoder().decode(r.stdout)
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
+  const code = await proc.exited
+  if (code !== 0) throw new Error(`cffi_fetch failed: ${stderr.trim()}`)
+  return stdout
 }
 
 /** Fetch via curl — bypasses Cloudflare's TLS fingerprint blocking.
- *  Bun's BoringSSL gets 403; curl's OpenSSL + Client Hints passes. */
-export const fetchWithCurl = (url: string): string => {
-  const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', url,
+ *  Bun's BoringSSL gets 403; curl's OpenSSL + Client Hints passes.
+ *  ASYNC: uses Bun.spawn to avoid blocking the event loop. */
+export const fetchWithCurl = async (url: string): Promise<string> => {
+  const proc = Bun.spawn(['curl', '-sL', '--max-time', '15', url,
     '-A', UA,
     '-H', 'Sec-CH-UA: "Google Chrome";v="131", "Chromium";v="131"',
     '-H', 'Sec-CH-UA-Mobile: ?0',
@@ -97,11 +104,15 @@ export const fetchWithCurl = (url: string): string => {
     '-H', 'Sec-Fetch-Dest: document',
     '-H', 'Sec-Fetch-Mode: navigate',
     '-H', 'Sec-Fetch-Site: none',
-  ], { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
-  if (r.exitCode !== 0) throw new Error(`curl failed: ${new TextDecoder().decode(r.stderr).trim()}`)
-  const html = new TextDecoder().decode(r.stdout)
-  if (html.length < 1000) throw new Error(`blocked (${html.length}b)`)
-  return html
+  ], { stdout: 'pipe', stderr: 'pipe' })
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
+  const code = await proc.exited
+  if (code !== 0) throw new Error(`curl failed: ${stderr.trim()}`)
+  if (stdout.length < 1000) throw new Error(`blocked (${stdout.length}b)`)
+  return stdout
 }
 
 /** Retry an async function up to `n` times with delay between attempts */

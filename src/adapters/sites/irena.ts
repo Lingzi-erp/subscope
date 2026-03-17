@@ -6,7 +6,7 @@ const BASE = 'https://www.irena.org'
 
 // IRENA: Azure WAF blocks Chrome TLS but Safari passes via curl_cffi
 export const fetchIRENA = async (source: Source): Promise<FeedItem[]> => {
-  const $ = cheerio.load(fetchWithCffi(source.url))
+  const $ = cheerio.load(await fetchWithCffi(source.url))
   const items: FeedItem[] = []
   const seen = new Set<string>()
 

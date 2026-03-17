@@ -5,7 +5,7 @@ import type { Source, FeedItem } from '../../types.ts'
 const BASE = 'https://www.opec.org'
 
 export const fetchOPEC = async (source: Source): Promise<FeedItem[]> => {
-  const $ = cheerio.load(fetchWithCurl(source.url))
+  const $ = cheerio.load(await fetchWithCurl(source.url))
   const items: FeedItem[] = []
   const seen = new Set<string>()
 

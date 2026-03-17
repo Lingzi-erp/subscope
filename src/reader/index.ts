@@ -12,7 +12,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
   // IRENA: Azure WAF blocks Chrome TLS; curl_cffi with Safari impersonation bypasses
   if (url.includes('irena.org/News/')) {
     try {
-      const html = fetchWithCffi(url)
+      const html = await fetchWithCffi(url)
       const $ = cheerio.load(html)
       const title = $('h1').first().text().trim() || $('title').text().trim()
       $('script, style, nav, footer, header, [class*="Toolbar"]').remove()
@@ -24,7 +24,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
   // EIA: Bun TLS handshake takes 10s to eia.gov; curl_cffi is instant
   if (url.includes('eia.gov/todayinenergy')) {
     try {
-      const $ = cheerio.load(fetchWithCffi(url))
+      const $ = cheerio.load(await fetchWithCffi(url))
       const title = findFirst($, '.tie-article h2, title')?.text || $('title').text().trim()
       const $body = $('.tie-article').first()
       if ($body.length) return { title: title.replace(/\s*[-–—]\s*(U\.S\. Energy|Today in Energy|EIA).*$/, '').trim(), text: extractText($body, $) }
@@ -85,7 +85,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     if (html.includes('{{data.') && html.includes('ng-controller')) {
       html = fetchWithBrowser(url, 'networkidle')
     } else if (html.length > 10000 && !/<p[\s>]/i.test(html)) {
-      try { html = fetchWithCffi(url) } catch { html = fetchWithBrowser(url) }
+      try { html = await fetchWithCffi(url) } catch { html = fetchWithBrowser(url) }
     }
   } catch {
     // Fallback 1: RSS feed content
@@ -95,7 +95,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     }
     // Fallback 2: curl_cffi with Safari TLS impersonation
     html = ''
-    try { html = fetchWithCffi(url) } catch {}
+    try { html = await fetchWithCffi(url) } catch {}
     // Fallback 3: curl with minimal UA
     if (!html) {
       try {
