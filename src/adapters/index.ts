@@ -32,6 +32,8 @@ import { fetchEU } from './sites/eu.ts'
 import { fetchOPEC } from './sites/opec.ts'
 import { fetchIRENA } from './sites/irena.ts'
 import { fetchTASS } from './sites/tass.ts'
+import { fetchCFTC } from './sites/cftc.ts'
+import { fetchNATO } from './sites/nato.ts'
 import type { SourceAdapter, SourceType } from '../types.ts'
 
 // Site-specific adapters — matched by (hostname, pathPrefix)
@@ -63,11 +65,13 @@ const siteRules: { host: string; path?: string; fetch: SourceAdapter['fetch'] }[
   { host: 'eia.gov', path: '/rss/', fetch: fetchEIA },
   { host: 'iaea.org', path: '/newscenter/', fetch: fetchIAEA },
   { host: 'wto.org', fetch: fetchWTO },
+  { host: 'cftc.gov', fetch: fetchCFTC },  // before ftc.gov (cftc.gov contains ftc.gov)
   { host: 'ftc.gov', fetch: fetchFTC },
   { host: 'ec.europa.eu', path: '/commission/presscorner/', fetch: fetchEU },
   { host: 'opec.org', fetch: fetchOPEC },
   { host: 'irena.org', fetch: fetchIRENA },
   { host: 'tass.com', fetch: fetchTASS },
+  { host: 'nato.int', path: '/content/nato/', fetch: fetchNATO },
 ]
 
 const matchSite = (url: string): SourceAdapter['fetch'] | undefined => {
