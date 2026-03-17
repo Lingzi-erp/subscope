@@ -37,14 +37,15 @@ const BRAND: [string, number][] = [
   ['yonhap', 39], ['yna.co.kr', 39],
   ['abc-au', 40], ['abc.net.au', 40],
   ['cbc', 160],
+  ['channelnewsasia', 160], ['cna', 160],
   ['aa.com.tr', 196], ['anadolu', 196],
   ['apnews', 255], ['focustaiwan', 39], ['thehindu', 208], ['boj', 231],
   ['iea', 214], ['eia', 107], ['doe', 39],
   ['opec', 178], ['opec.org', 178], ['irena', 77],
   ['un', 75], ['who', 39], ['iaea', 220], ['wto', 33],
   ['eu', 33], ['ec.europa', 33],
+  ['cftc', 33], ['cftc.gov', 33],  // before ftc (cftc contains ftc)
   ['ftc', 107], ['ftc.gov', 107],
-  ['cftc', 33], ['cftc.gov', 33],
   ['nato', 27], ['nato.int', 27],
 ]
 
@@ -120,13 +121,15 @@ const DISPLAY: [string, string][] = [
   ['yna.co.kr', 'Yonhap'], ['abc.net.au', 'ABC Australia'],
   ['cbc.ca', 'CBC'],
   ['apnews.com', 'AP News'], ['focustaiwan.tw', 'Focus Taiwan'],
-  ['thehindu.com', 'The Hindu'], ['aa.com.tr', 'Anadolu Agency'],
+  ['thehindu.com', 'The Hindu'], ['channelnewsasia', 'CNA'],
+  ['aa.com.tr', 'Anadolu Agency'],
   ['boj.or.jp', 'BOJ'],
   ['iea.org', 'IEA'], ['eia.gov', 'EIA'],
   ['news.un.org', 'UN News'], ['who.int', 'WHO'],
   ['iaea.org', 'IAEA'], ['wto.org', 'WTO'],
-  ['ec.europa.eu', 'EU Commission'], ['ftc.gov', 'FTC'],
-  ['cftc.gov', 'CFTC'], ['nato.int', 'NATO'],
+  ['ec.europa.eu', 'EU Commission'],
+  ['cftc.gov', 'CFTC'], ['ftc.gov', 'FTC'],  // cftc before ftc
+  ['nato.int', 'NATO'],
 ]
 
 export const formatSourceName = (name: string): string => {

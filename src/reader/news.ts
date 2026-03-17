@@ -126,6 +126,25 @@ export const newsRules: SiteRule[] = [
     },
   },
   {
+    test: u => u.includes('channelnewsasia.com'),
+    selector: '.content-wrapper, .content-detail__description, article',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[-–—]\s*CNA$/, '').trim(),
+    pick: $ => {
+      const $body = $('.content-wrapper').first().clone()
+      // Strip CNA Games widget, related stories, ads
+      $body.find('*').each((_, el) => {
+        const t = $(el).text().trim()
+        if (/^CNA Games$/i.test(t) || /^(Show More|Also worth reading|Related topics?)$/i.test(t)) {
+          $(el).nextAll().remove()
+          $(el).remove()
+        }
+      })
+      $body.find('[class*="embed"], [class*="related"], [class*="ad-"]').remove()
+      return $body
+    },
+  },
+  {
     test: u => u.includes('aa.com.tr'),
     selector: '.detay-icerik, article',
     title: 'h1',
