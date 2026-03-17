@@ -26,8 +26,16 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     try {
       const $ = cheerio.load(await fetchWithCffi(url))
       const title = findFirst($, '.tie-article h2, title')?.text || $('title').text().trim()
-      const $body = $('.tie-article').first()
-      if ($body.length) return { title: title.replace(/\s*[-–—]\s*(U\.S\. Energy|Today in Energy|EIA).*$/, '').trim(), text: extractText($body, $) }
+      const $body = $('.tie-article').first().clone()
+      if ($body.length) {
+        // Remove title duplicate (h2 inside .tie-article) and trailing metadata
+        $body.find('h2').first().remove()
+        $body.find('*').each((_, el) => {
+          const t = $(el).text().trim()
+          if (/^(Principal contributor|Tags:)/i.test(t)) $(el).remove()
+        })
+        return { title: title.replace(/\s*[-–—]\s*(U\.S\. Energy|Today in Energy|EIA).*$/, '').trim(), text: extractText($body, $) }
+      }
     } catch {}
   }
 

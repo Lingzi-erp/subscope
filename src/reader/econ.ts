@@ -101,6 +101,18 @@ export const econRules: SiteRule[] = [
     selector: 'article .column-padding, article',
     title: 'h1, title',
     cleanTitle: t => t.replace(/\s*[-–]\s*IMF$/, '').trim(),
+    pick: $ => {
+      const $body = $('article .column-padding, article').first().clone()
+      // Strip IMF Communications Department footer block
+      $body.find('*').each((_, el) => {
+        const t = $(el).text().trim()
+        if (/^IMF Communications Department$/i.test(t) || /^MEDIA RELATIONS$/i.test(t) || /^PRESS OFFICER$/i.test(t)) {
+          $(el).nextAll().remove()
+          $(el).remove()
+        }
+      })
+      return $body
+    },
   },
   {
     test: u => u.includes('csrc.gov.cn'),

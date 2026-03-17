@@ -105,12 +105,25 @@ export const newsRules: SiteRule[] = [
     selector: '.PrimarySide .paragraph',
     title: 'h1',
     cleanTitle: t => t.replace(/\s*[|–—]\s*Focus Taiwan$/, '').trim(),
+    pick: $ => {
+      const $body = $('.PrimarySide .paragraph').first().clone()
+      // Strip CNA wire-service markers like "Enditem/ls"
+      $body.find('p').each((_, el) => {
+        if (/^Enditem/i.test($(el).text().trim())) $(el).remove()
+      })
+      return $body
+    },
   },
   {
     test: u => u.includes('thehindu.com'),
     selector: '.articlebodycontent',
     title: 'h1',
     cleanTitle: t => t.replace(/\s*[|–—]\s*The Hindu$/, '').trim(),
+    pick: $ => {
+      const $body = $('.articlebodycontent').first().clone()
+      $body.find('.related-topics, [class*="publish-time"], [class*="comments"], [class*="share-page"], [class*="article-ad"], [class*="spliter"]').remove()
+      return $body
+    },
   },
   {
     test: u => u.includes('nhk.or.jp') || u.includes('nhk.jp'),

@@ -43,6 +43,13 @@ export const aiRules: SiteRule[] = [
       const $prose = $('.prose.prose-invert').first().clone()
       if (!$prose.length) return $prose
       $prose.find('[class*="not-prose"]').remove()
+      // Strip "Join the Journey" recruitment CTA
+      $prose.find('*').each((_, el) => {
+        if (/^Join the Journey$/i.test($(el).text().trim())) {
+          $(el).nextAll().remove()
+          $(el).remove()
+        }
+      })
       return $prose
     },
   },
@@ -52,6 +59,17 @@ export const aiRules: SiteRule[] = [
     title: 'h1',
     cleanTitle: t => t.replace(/\s*\|\s*OpenAI$/, '').trim(),
     // No feedUrl — RSS only has summaries. Cloudflare blocks HTTP, falls through to Playwright.
+    pick: $ => {
+      const $article = $('article').first().clone()
+      // Strip "Keep reading" / related articles section, Loading... placeholders, and metadata labels
+      $article.find('*').each((_, el) => {
+        const t = $(el).text().trim()
+        if (/^(Keep reading|View all|Loading)\.{0,3}$/i.test(t)) $(el).remove()
+      })
+      // Strip trailing recommended article cards (contain dates like "Mar 5, 2026")
+      $article.find('[class*="CardGrid"], [class*="HubPeek"], [class*="RelatedStories"]').remove()
+      return $article
+    },
   },
   {
     test: u => u.includes('deepmind.google'),
