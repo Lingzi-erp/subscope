@@ -68,6 +68,7 @@ src/
       wto.ts                WTO news via JS data file (/library/news/news_YYYY_e.js)
       eu.ts                 EU Commission press releases (JSON API)
       ftc.ts                FTC press releases (RSS)
+      fcc.ts                FCC headlines page scraper (cffi for Akamai bypass)
       opec.ts               OPEC press releases (HTML via curl)
       irena.ts              IRENA news (HTML via cffi)
       reuters.ts            Reuters world news (HTML via cffi, Datadome bypass)
@@ -121,7 +122,7 @@ Five sources under `energy/`: IEA (HTML scrape from iea.org/news), EIA (RSS via 
 Four sources under `intl/`: UN News (RSS), WHO (RSS), IAEA (dedicated adapter scraping h3.card__title links from pressreleases page), WTO (dedicated adapter parsing /library/news/news_YYYY_e.js data file — structured JS objects with titles, summaries, dates).
 
 ### Regulation sources
-Two sources under `reg/`: EU Commission (JSON API at `ec.europa.eu/commission/presscorner/api/search`, filtered to press releases), FTC (RSS feed at ftc.gov/feeds/press-release.xml).
+Three sources under `reg/`: EU Commission (JSON API at `ec.europa.eu/commission/presscorner/api/search`, filtered to press releases), FTC (RSS feed at ftc.gov/feeds/press-release.xml), FCC (dedicated adapter scraping `/document/` links from headlines page via cffi — Akamai geo-blocking bypass).
 
 ### JSON output (`-j`)
 `subscope glob -j 20` outputs clean JSON array: `[{title, source, url, summary, publishedAt}]`. Source names formatted for readability (e.g., "央视网" not "news.cctv.com/world"). Pipe-friendly for LLMs.
@@ -129,7 +130,7 @@ Two sources under `reg/`: EU Commission (JSON API at `ec.europa.eu/commission/pr
 ### Article reader (`subscope read`)
 Pipe-friendly full-text extractor for LLM consumption. Output: `# Title\n\ntext`. Per-site CSS selectors for all blog-type sources:
 - **AI**: Anthropic (CSS modules `Body-module`), Claude blog (`.u-rich-text-blog`), Claude Support (`.article_body`), OpenAI (`article`), Google AI Blog (`article` with AI-summary strip), NVIDIA (`article-body`), DeepMind (`main`), DeepSeek (`.theme-doc-markdown`), xAI (`.prose.prose-invert`)
-- **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), BOJ (`div.outline`), NBS (`.txt-content`), BLS (`#bodytext` with `<pre>` conversion, Sec-Fetch headers), BEA (`.field--name-body`), Treasury (`og:description` meta fallback), IMF (`article .column-padding`), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle in reader), CFPB (`.m-full-width-text`), EIA (`.tie-article` via cffi), IEA (`article` with metadata strip), IAEA (`article, .field--name-body`), WTO (`.centerCol`), EU (JSON API bypass for Angular SPA), FTC (`.node__content .field--name-body`), UN News (`.paragraph--type--one-column-text`), WHO (`article`)
+- **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), BOJ (`div.outline`), NBS (`.txt-content`), BLS (`#bodytext` with `<pre>` conversion, Sec-Fetch headers), BEA (`.field--name-body`), Treasury (`og:description` meta fallback), IMF (`article .column-padding`), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle in reader), CFPB (`.m-full-width-text`), EIA (`.tie-article` via cffi), IEA (`article` with metadata strip), IAEA (`article, .field--name-body`), WTO (`.centerCol`), EU (JSON API bypass for Angular SPA), FTC (`.node__content .field--name-body`), FCC (`article, main` — Akamai-protected, cffi/Playwright fallback), UN News (`.paragraph--type--one-column-text`), WHO (`article`)
 - **News**: BBC (`data-component` text blocks), France24 (`.t-content__body`), DW (`.rich-text`), NHK (generic fallback), Al Jazeera (`.wysiwyg`), Reuters (`article, main` via cffi — Datadome-protected), TASS (`.text-content`), Yonhap (`article.story-news > p`), AP News (`.RichTextStoryBody`), ABC Australia (`engagement_target`), CBC (`.story > p/h2`), Focus Taiwan (`.PrimarySide .paragraph`), The Hindu (`.articlebodycontent`), Anadolu Agency (`.detay-icerik`), CNA (`.content-wrapper`), People's Daily (`.rm_txt_con`), CCTV (`.content_area`), Xinhua (`#detailContent`)
 - **Other**: GitHub releases (`[data-test-selector="body-content"]`)
 - Anti-bot bypass: Playwright (last-resort fallback in reader) spawns system Chrome with `--disable-blink-features=AutomationControlled`, `navigator.webdriver=false`, `--ignore-certificate-errors`

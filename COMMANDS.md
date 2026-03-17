@@ -125,7 +125,7 @@ Built-in modes (from code, not saved to config):
 - `eco` -- group prefix `econ` (15 sources: Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA, CFPB)
 - `glob` -- group prefix `news` (18 sources: BBC, France24, DW, NHK, Al Jazeera, Reuters, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA)
 
-Other groups (use `-g` flag): `energy` (IEA, EIA, DOE, OPEC, IRENA), `intl` (UN, WHO, IAEA, WTO), `reg` (EU Commission, FTC).
+Other groups (use `-g` flag): `energy` (IEA, EIA, DOE, OPEC, IRENA), `intl` (UN, WHO, IAEA, WTO), `reg` (EU Commission, FTC, FCC).
 
 Modes can filter by source type (`types`) and/or group prefix (`groups`). `-g` flag bypasses mode filtering and shows all source types in that group.
 
