@@ -1,11 +1,40 @@
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { parse } from 'yaml'
 import { hash, item, sortDesc, DIR, UA } from '../lib.ts'
 import type { Source, FeedItem, SourceAdapter } from '../types.ts'
 
-const AUTH_FILE = join(DIR, 'auth.yml')
 const UID_CACHE_FILE = join(DIR, 'x-uid-cache.json')
+
+const BEARER = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+
+const FEATURES = JSON.stringify({
+  rweb_tipjar_consumption_enabled: true,
+  responsive_web_graphql_exclude_directive_enabled: true,
+  verified_phone_label_enabled: false,
+  creator_subscriptions_tweet_preview_api_enabled: true,
+  responsive_web_graphql_timeline_navigation_enabled: true,
+  responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+  communities_web_enable_tweet_community_results_fetch: true,
+  tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
+  longform_notetweets_consumption_enabled: true,
+  longform_notetweets_rich_text_read_enabled: true,
+  responsive_web_edit_tweet_api_enabled: true,
+  graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
+  view_counts_everywhere_api_enabled: true,
+  freedom_of_speech_not_reach_fetch_enabled: true,
+  longform_notetweets_inline_media_enabled: true,
+  responsive_web_enhance_cards_enabled: false,
+  responsive_web_twitter_article_tweet_consumption_enabled: true,
+  standardized_nudges_misinfo: true,
+})
+
+const USER_FEATURES = JSON.stringify({
+  hidden_profile_subscriptions_enabled: true,
+  responsive_web_graphql_exclude_directive_enabled: true,
+  verified_phone_label_enabled: false,
+  responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+  responsive_web_graphql_timeline_navigation_enabled: true,
+})
 
 export const twitter: SourceAdapter = {
   type: 'twitter',
@@ -18,122 +47,41 @@ export const twitter: SourceAdapter = {
     const username = source.url.match(/(?:x\.com|twitter\.com)\/?@?([\w]+)/)?.[1]
     if (!username) return []
 
-    // Primary: syndication API (no auth, fast)
-    try {
-      const tweets = await fetchViaSyndication(username)
-      if (tweets.length > 0) return mergeThreads(tweets, username, source)
-    } catch {}
-
-    // Fallback: GraphQL API (requires auth_token)
-    const session = await getSession()
+    const gt = await getGuestToken()
     let userId = getCachedUid(username)
     if (!userId) {
-      userId = await resolveUserId(session, username)
+      userId = await resolveUserId(gt, username)
       if (!userId) throw new Error(`X: user "${username}" not found`)
       cacheUid(username, userId)
     }
-    return mergeThreads(await fetchUserTweets(session, userId), username, source)
+    return mergeThreads(await fetchUserTweets(gt, userId), username, source)
   },
 }
 
-// ── Primary: Syndication (public, no auth) ──
+// ── Guest Token (shared across all X sources per fetch cycle) ──
 
-const SYND_BASE = 'https://syndication.twitter.com/srv/timeline-profile/screen-name/'
+let guestTokenPromise: Promise<string> | null = null
 
-const fetchViaSyndication = async (username: string): Promise<RawTweet[]> => {
-  const res = await fetch(`${SYND_BASE}${username}`, {
-    headers: { 'User-Agent': UA },
-    signal: AbortSignal.timeout(8000),
-    tls: { rejectUnauthorized: false },
-  } as any)
-  if (!res.ok) throw new Error(`Syndication: ${res.status}`)
-  const html = await res.text()
-
-  // Extract __NEXT_DATA__ JSON from the Next.js page
-  const idx = html.indexOf('__NEXT_DATA__')
-  if (idx < 0) throw new Error('No __NEXT_DATA__')
-  const start = html.indexOf('>', idx) + 1
-  const end = html.indexOf('</script>', start)
-  const data = JSON.parse(html.slice(start, end)) as any
-
-  const entries: any[] = data?.props?.pageProps?.timeline?.entries ?? []
-  const tweets: RawTweet[] = []
-
-  for (const entry of entries) {
-    const t = entry?.content?.tweet
-    if (!t?.id_str || !t?.full_text) continue
-    tweets.push({
-      id: t.id_str,
-      text: t.full_text,
-      date: t.created_at ?? '',
-      convId: t.conversation_id_str ?? t.id_str,
-      replyToId: t.in_reply_to_status_id_str ?? null,
+const getGuestToken = (): Promise<string> => {
+  if (guestTokenPromise) return guestTokenPromise
+  guestTokenPromise = (async () => {
+    const res = await fetch('https://api.twitter.com/1.1/guest/activate.json', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${BEARER}` },
     })
-  }
-
-  return tweets
+    if (!res.ok) throw new Error(`X guest token: ${res.status}`)
+    return ((await res.json()) as any).guest_token as string
+  })()
+  return guestTokenPromise
 }
 
-// ── Fallback: GraphQL (requires auth_token) ──
-
-const BEARER = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
-
-const FEATURES = JSON.stringify({
-  rweb_tipjar_consumption_enabled: true,
-  responsive_web_graphql_exclude_directive_enabled: true,
-  verified_phone_label_enabled: false,
-  creator_subscriptions_tweet_preview_api_enabled: true,
-  responsive_web_graphql_timeline_navigation_enabled: true,
-  responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-  communities_web_enable_tweet_community_results_fetch: true,
-  c9s_tweet_anatomy_moderator_badge_enabled: true,
-  articles_preview_enabled: true,
-  responsive_web_edit_tweet_api_enabled: true,
-  graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
-  view_counts_everywhere_api_enabled: true,
-  longform_notetweets_consumption_enabled: true,
-  responsive_web_twitter_article_tweet_consumption_enabled: true,
-  tweet_awards_web_tipping_enabled: false,
-  creator_subscriptions_quote_tweet_preview_enabled: false,
-  freedom_of_speech_not_reach_fetch_enabled: true,
-  standardized_nudges_misinfo: true,
-  tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
-  rweb_video_timestamps_enabled: true,
-  longform_notetweets_rich_text_read_enabled: true,
-  longform_notetweets_inline_media_enabled: true,
-  responsive_web_enhance_cards_enabled: false,
+const apiHeaders = (guestToken: string) => ({
+  Authorization: `Bearer ${BEARER}`,
+  'X-Guest-Token': guestToken,
 })
 
-// Session cache — CSRF token reused across all X sources in one fetch cycle
-let sessionPromise: Promise<{ ct0: string; authToken: string }> | null = null
+// ── User ID cache ──
 
-const getSession = () => {
-  if (sessionPromise) return sessionPromise
-
-  sessionPromise = (async () => {
-    const authToken = (() => {
-      try {
-        if (!existsSync(AUTH_FILE)) return null
-        return (parse(readFileSync(AUTH_FILE, 'utf-8')) as any)?.x?.auth_token ?? null
-      } catch { return null }
-    })()
-    if (!authToken) throw new Error('X auth required. Run: subscope auth x <token>')
-
-    const res = await fetch('https://x.com', {
-      headers: { Cookie: `auth_token=${authToken}` },
-      redirect: 'manual',
-    })
-    const cookies = res.headers.getSetCookie?.() ?? []
-    const ct0 = cookies.find(c => c.startsWith('ct0='))?.split('=')[1]?.split(';')[0]
-    if (!ct0) throw new Error('X: failed to get CSRF token — auth_token may be expired')
-
-    return { ct0, authToken }
-  })()
-
-  return sessionPromise
-}
-
-// User ID cache (IDs are permanent)
 let uidCache: Record<string, string> | null = null
 
 const loadUidCache = (): Record<string, string> => {
@@ -154,28 +102,17 @@ const cacheUid = (username: string, userId: string) => {
   try { writeFileSync(UID_CACHE_FILE, JSON.stringify(cache)) } catch {}
 }
 
-const apiHeaders = (s: { ct0: string; authToken: string }) => ({
-  Authorization: `Bearer ${BEARER}`,
-  'X-Csrf-Token': s.ct0,
-  Cookie: `auth_token=${s.authToken}; ct0=${s.ct0}`,
-})
+// ── GraphQL API ──
 
-const resolveUserId = async (session: { ct0: string; authToken: string }, username: string): Promise<string | null> => {
+const resolveUserId = async (guestToken: string, username: string): Promise<string | null> => {
   const variables = JSON.stringify({ screen_name: username })
-  const features = JSON.stringify({
-    hidden_profile_subscriptions_enabled: true,
-    responsive_web_graphql_exclude_directive_enabled: true,
-    verified_phone_label_enabled: false,
-    responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-    responsive_web_graphql_timeline_navigation_enabled: true,
-  })
-  const url = `https://x.com/i/api/graphql/xc8f1g7BYqr6VTzTbvNlGw/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(features)}`
-  const res = await fetch(url, { headers: apiHeaders(session) })
+  const url = `https://x.com/i/api/graphql/xc8f1g7BYqr6VTzTbvNlGw/UserByScreenName?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(USER_FEATURES)}`
+  const res = await fetch(url, { headers: apiHeaders(guestToken) })
   if (!res.ok) return null
   return ((await res.json()) as any)?.data?.user?.result?.rest_id ?? null
 }
 
-const fetchUserTweets = async (session: { ct0: string; authToken: string }, userId: string): Promise<RawTweet[]> => {
+const fetchUserTweets = async (guestToken: string, userId: string): Promise<RawTweet[]> => {
   const variables = JSON.stringify({
     userId, count: 40,
     includePromotedContent: false,
@@ -183,7 +120,7 @@ const fetchUserTweets = async (session: { ct0: string; authToken: string }, user
     withVoice: false, withV2Timeline: true,
   })
   const url = `https://x.com/i/api/graphql/E3opETHurmVJflFsUBVuUQ/UserTweets?variables=${encodeURIComponent(variables)}&features=${encodeURIComponent(FEATURES)}`
-  const res = await fetch(url, { headers: apiHeaders(session) })
+  const res = await fetch(url, { headers: apiHeaders(guestToken) })
   if (!res.ok) throw new Error(`X API: ${res.status}`)
 
   const tweets: RawTweet[] = []
