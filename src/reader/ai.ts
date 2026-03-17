@@ -6,7 +6,14 @@ export const aiRules: SiteRule[] = [
     selector: 'article',
     title: 'h1',
     cleanTitle: t => t.replace(/\s*[\|–—]\s*Anthropic$/, '').trim(),
-    pick: $ => $('[class*="Body-module"][class*="__body"]').first(),
+    pick: $ => {
+      const $body = $('[class*="Body-module"][class*="__body"]').first().clone()
+      // Strip carousel pagination (e.g. "01 /04")
+      $body.find('*').each((_, el) => {
+        if (/^\d{2}\s*\/\d{2}$/.test($(el).text().trim())) $(el).remove()
+      })
+      return $body
+    },
   },
   {
     test: u => /claude\.com\/blog\/.+/.test(u),
@@ -83,12 +90,17 @@ export const aiRules: SiteRule[] = [
       $main.find('section').each((_, el) => {
         if (/related\s+posts/i.test($(el).text())) $(el).remove()
       })
-      // Remove the last section if it's a promo (no substantive paragraphs)
       const sections = $main.find('main > section, section').toArray()
       if (sections.length > 0) {
         const last = sections[sections.length - 1]
         if (last && $(last).find('p').length === 0) $(last).remove()
       }
+      // Strip hero metadata (date, category, author name)
+      $main.find('*').each((_, el) => {
+        const t = $(el).text().trim()
+        if (/^\w+\s+\d{1,2},\s+\d{4}$/i.test(t)) $(el).remove() // "March 10, 2026"
+        if (/^(Research|Blog post|Article)$/i.test(t)) $(el).remove()
+      })
       return $main
     },
   },

@@ -159,6 +159,15 @@ export const econRules: SiteRule[] = [
     selector: 'article, main',
     title: 'h1',
     cleanTitle: t => t.replace(/\s*[-–—|]\s*IEA$/, '').trim(),
+    pick: $ => {
+      const $body = $('section.o-page, article, main').first().clone()
+      // Strip leading metadata (category label "News", date, share buttons)
+      $body.find('*').each((_, el) => {
+        const t = $(el).text().trim()
+        if (/^(News|Press release|Commentary|Report)$/i.test(t) || /^\d{1,2}\s+\w+\s+\d{4}$/.test(t)) $(el).remove()
+      })
+      return $body
+    },
   },
   {
     test: u => u.includes('iaea.org'),
