@@ -2,15 +2,56 @@
 
 First-hand intelligence from 74 official sources in one terminal. AI companies, central banks, financial regulators, global news, energy agencies, international organizations — no intermediaries, no aggregators.
 
-## Get started
+## Install
 
-```
-bun install && bun link
-subscope fetch
-subscope
+### 1. Bun (runtime)
+
+subscope runs on [Bun](https://bun.sh), not Node.js.
+
+```bash
+# Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1 | iex"
+
+# macOS / Linux
+curl -fsSL https://bun.sh/install | bash
 ```
 
-That's it. `fetch` pulls all 74 sources (~3s). `subscope` opens an interactive browser — arrow keys to navigate, enter to open, `/` to search, `q` to quit.
+### 2. Python + curl_cffi (anti-bot bypass)
+
+About 15 sources (SEC, IMF, Reuters, TASS, BOE, EIA, IRENA, OECD, World Bank, FCC, etc.) need TLS fingerprint impersonation to bypass anti-bot systems. Without this they'll fail silently.
+
+```bash
+# Install Python 3 if you don't have it
+# Windows: https://www.python.org/downloads/ (check "Add to PATH")
+# macOS: brew install python
+# Linux: sudo apt install python3 python3-pip
+
+pip install curl_cffi
+```
+
+### 3. subscope
+
+```bash
+npm install -g @zerozia/subscope
+```
+
+### 4. Playwright (optional, for article reader fallback)
+
+Only needed if you use `subscope read` on sites with heavy JS rendering (Angular SPAs, etc.). Most sources work without it.
+
+```bash
+npm install -g playwright
+npx playwright install chromium
+```
+
+### 5. Go
+
+```bash
+subscope fetch               # pull all 74 sources (~3s)
+subscope                     # interactive browser
+```
+
+`fetch` pulls all sources. `subscope` opens an interactive browser — arrow keys to navigate, enter to open, `/` to search, `q` to quit.
 
 ## Modes
 
