@@ -3,7 +3,8 @@ import { UA } from './lib.ts'
 
 // Playwright via system Chrome — anti-bot bypass for BLS, IMF, etc.
 // Spawned through node (not Bun) due to oven-sh/bun#27977
-export const fetchWithBrowser = (url: string, waitUntil: 'domcontentloaded' | 'networkidle' = 'domcontentloaded'): string => {
+// ASYNC: uses Bun.spawn to avoid blocking the event loop.
+export const fetchWithBrowser = async (url: string, waitUntil: 'domcontentloaded' | 'networkidle' = 'domcontentloaded'): Promise<string> => {
   const projectRoot = join(import.meta.dir, '..')
   const script = [
     `const{chromium}=require('playwright');`,
@@ -18,13 +19,18 @@ export const fetchWithBrowser = (url: string, waitUntil: 'domcontentloaded' | 'n
     `await b.close();`,
     `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
   ].join('')
-  const r = Bun.spawnSync(['node', '-e', script], {
-    stdout: 'pipe', stderr: 'pipe', timeout: 30_000,
+  const proc = Bun.spawn(['node', '-e', script], {
+    stdout: 'pipe', stderr: 'pipe',
     cwd: projectRoot,
     env: { ...process.env, NODE_PATH: join(projectRoot, 'node_modules') },
   })
-  if (r.exitCode !== 0) {
-    throw new Error(`Browser fetch failed: ${new TextDecoder().decode(r.stderr).trim() || 'unknown error'}`)
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
+  const code = await proc.exited
+  if (code !== 0) {
+    throw new Error(`Browser fetch failed: ${stderr.trim() || 'unknown error'}`)
   }
-  return new TextDecoder().decode(r.stdout)
+  return stdout
 }

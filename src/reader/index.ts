@@ -83,9 +83,9 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     }, 3, 500)
     // SPA detection: Angular templates or large HTML with no <p> content
     if (html.includes('{{data.') && html.includes('ng-controller')) {
-      html = fetchWithBrowser(url, 'networkidle')
+      html = await fetchWithBrowser(url, 'networkidle')
     } else if (html.length > 10000 && !/<p[\s>]/i.test(html)) {
-      try { html = await fetchWithCffi(url) } catch { html = fetchWithBrowser(url) }
+      try { html = await fetchWithCffi(url) } catch { html = await fetchWithBrowser(url) }
     }
   } catch {
     // Fallback 1: RSS feed content
@@ -99,16 +99,14 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
     // Fallback 3: curl with minimal UA
     if (!html) {
       try {
-        const r = Bun.spawnSync(['curl', '-sL', '--max-time', '15', url, '-A', 'Mozilla/5.0'],
-          { stdout: 'pipe', stderr: 'pipe', timeout: 20_000 })
-        if (r.exitCode === 0) {
-          const t = new TextDecoder().decode(r.stdout)
-          if (t.length > 1000 && !t.includes('403 Forbidden')) html = t
-        }
+        const proc = Bun.spawn(['curl', '-sL', '--max-time', '15', url, '-A', 'Mozilla/5.0'],
+          { stdout: 'pipe', stderr: 'pipe' })
+        const t = await new Response(proc.stdout).text()
+        if ((await proc.exited) === 0 && t.length > 1000 && !t.includes('403 Forbidden')) html = t
       } catch {}
     }
     // Fallback 4: Playwright
-    if (!html) html = fetchWithBrowser(url)
+    if (!html) html = await fetchWithBrowser(url)
   }
 
   const $ = cheerio.load(html)
@@ -148,7 +146,7 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
       const browserUrl = iframeId
         ? `https://direkt-klient.ifragasatt.se/?aId=${iframeId}`
         : url
-      const browserHtml = fetchWithBrowser(browserUrl, 'networkidle')
+      const browserHtml = await fetchWithBrowser(browserUrl, 'networkidle')
       const $b = cheerio.load(browserHtml)
 
       if (!iframeId) {

@@ -6,7 +6,7 @@ import type { Source, FeedItem } from '../../types.ts'
 const BASE = 'https://www.nfra.gov.cn'
 
 // Angular SPA needs networkidle to render content
-const fetchWithAngular = (url: string): string => {
+const fetchWithAngular = async (url: string): Promise<string> => {
   const projectRoot = join(import.meta.dir, '..', '..')
   const script = [
     `const{chromium}=require('playwright');`,
@@ -20,17 +20,22 @@ const fetchWithAngular = (url: string): string => {
     `await b.close();`,
     `})().catch(e=>{process.stderr.write(e.message);process.exit(1)});`,
   ].join('')
-  const r = Bun.spawnSync(['node', '-e', script], {
-    stdout: 'pipe', stderr: 'pipe', timeout: 30_000,
+  const proc = Bun.spawn(['node', '-e', script], {
+    stdout: 'pipe', stderr: 'pipe',
     cwd: projectRoot,
     env: { ...process.env, NODE_PATH: join(projectRoot, 'node_modules') },
   })
-  if (r.exitCode !== 0) throw new Error(`Browser fetch failed: ${new TextDecoder().decode(r.stderr).trim()}`)
-  return new TextDecoder().decode(r.stdout)
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ])
+  const code = await proc.exited
+  if (code !== 0) throw new Error(`Browser fetch failed: ${stderr.trim()}`)
+  return stdout
 }
 
 export const fetchNFRA = async (source: Source): Promise<FeedItem[]> => {
-  const html = fetchWithAngular(source.url)
+  const html = await fetchWithAngular(source.url)
 
   const $ = cheerio.load(html)
   const items: FeedItem[] = []
