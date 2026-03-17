@@ -6,7 +6,7 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 First-hand information from official sources only — no intermediaries, no aggregators, no SEO-polluted search results. Five dimensions: AI companies, central banks & financial regulators, global official media, energy agencies, and international organizations.
 
-62 sources across 6 groups: AI (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), energy (IEA, EIA, DOE, OPEC, IRENA), international orgs (UN, WHO, IAEA, WTO), regulation (EU Commission, FTC). All sources hardcoded in `src/sources.ts`.
+67 sources across 6 groups: AI (Anthropic, Claude, OpenAI, Google AI, NVIDIA, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA, CFPB), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA), energy (IEA, EIA, DOE, OPEC, IRENA), international orgs (UN, WHO, IAEA, WTO), regulation (EU Commission, FTC). All sources hardcoded in `src/sources.ts`.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ subscope auth academic       # Papers: copy Cookie header from nature.com, run t
 Fetch and read:
 
 ```
-subscope fetch               # pull all sources (62 sources, ~3s)
+subscope fetch               # pull all sources (67 sources, ~3s)
 subscope                     # interactive browser with search
 ```
 
@@ -35,8 +35,8 @@ subscope                     # interactive browser with search
 subscope                     # browse items (up/down, enter to open, / to search, g for PDF)
 subscope ai                  # AI company websites (default mode)
 subscope quick               # social media only (X + YouTube)
-subscope eco                 # economics & finance (14 sources)
-subscope glob                # global news (15 sources)
+subscope eco                 # economics & finance (15 sources)
+subscope glob                # global news (17 sources)
 subscope -g energy           # energy sources (5 sources)
 subscope -g reg              # regulation (EU Commission, FTC)
 subscope --all               # no time filter
@@ -120,6 +120,8 @@ ai/
   anthropic   (blog, research, engineering, youtube, x)
   claude      (blog, support x2, youtube, x)
   openai      (news rss, youtube, x)
+  google      (Google AI Blog rss)
+  nvidia      (NVIDIA News rss)
   deepmind    (blog rss, youtube, x)
   deepseek    (changelog, github, x)
   xai         (news, x)
@@ -138,9 +140,10 @@ econ/
   mof         (财政部 fiscal policy, budget, bond issuance)
   safe        (外汇管理局 forex reserves, cross-border capital)
   nfra        (金融监管总局 banking/insurance regulation)
+  cfpb        (Consumer Financial Protection Bureau rss)
 news/
   bbc, france24, dw, nhk, aljazeera, tass, yonhap, abc-au, cbc
-  ap, focustw, thehindu
+  ap, focustw, thehindu, aa (Anadolu Agency), cna (Channel NewsAsia)
   cctv (world + china), xinhua (world + china), people
 energy/
   iea         (HTML scrape)
