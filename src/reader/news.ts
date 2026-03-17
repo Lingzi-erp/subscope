@@ -40,6 +40,12 @@ export const newsRules: SiteRule[] = [
     },
   },
   {
+    test: u => u.includes('reuters.com'),
+    selector: 'article, main',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[|–—]\s*Reuters$/, '').trim(),
+  },
+  {
     test: u => u.includes('tass.com'),
     selector: '.text-content',
     title: 'h1',

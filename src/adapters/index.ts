@@ -32,6 +32,7 @@ import { fetchEU } from './sites/eu.ts'
 import { fetchOPEC } from './sites/opec.ts'
 import { fetchIRENA } from './sites/irena.ts'
 import { fetchTASS } from './sites/tass.ts'
+import { fetchReuters } from './sites/reuters.ts'
 import { fetchCFTC } from './sites/cftc.ts'
 import { fetchNATO } from './sites/nato.ts'
 import type { SourceAdapter, SourceType } from '../types.ts'
@@ -71,6 +72,7 @@ const siteRules: { host: string; path?: string; fetch: SourceAdapter['fetch'] }[
   { host: 'opec.org', fetch: fetchOPEC },
   { host: 'irena.org', fetch: fetchIRENA },
   { host: 'tass.com', fetch: fetchTASS },
+  { host: 'reuters.com', path: '/world/', fetch: fetchReuters },
   { host: 'nato.int', path: '/content/nato/', fetch: fetchNATO },
 ]
 
