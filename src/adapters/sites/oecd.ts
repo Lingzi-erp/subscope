@@ -6,7 +6,7 @@ const BASE = 'https://www.oecd.org'
 
 // OECD: Cloudflare blocks most TLS fingerprints; chrome120 via curl_cffi passes
 export const fetchOECD = async (source: Source): Promise<FeedItem[]> => {
-  const $ = cheerio.load(await fetchWithCffi(source.url, 'chrome120'))
+  const $ = cheerio.load(await fetchWithCffi(source.url, 'auto'))
   const items: FeedItem[] = []
   const seen = new Set<string>()
 
