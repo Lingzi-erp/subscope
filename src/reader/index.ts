@@ -44,8 +44,8 @@ export const readArticle = async (url: string): Promise<{ title: string; text: s
         const title = json.docuLanguageResource?.title ?? ref
         const html = json.docuLanguageResource?.htmlContent ?? ''
         const $ = cheerio.load(html)
-        $('a').each((_, el) => { const $a = $(el); $a.replaceWith($a.text()) })
-        return { title, text: $.text().replace(/\s+/g, ' ').trim() }
+        $('script, style, nav, footer').remove()
+        return { title, text: extractText($('body'), $) }
       }
     }
   }
