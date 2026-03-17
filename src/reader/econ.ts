@@ -183,6 +183,12 @@ export const econRules: SiteRule[] = [
   },
   // EU Presscorner: handled via JSON API in reader/index.ts (Angular SPA bypass)
   {
+    test: u => u.includes('fcc.gov/document'),
+    selector: 'article, main',
+    title: 'h1 span, h1',
+    cleanTitle: t => t.replace(/\s*\|\s*Federal Communications Commission$/, '').trim(),
+  },
+  {
     test: u => u.includes('cftc.gov'),  // before ftc.gov (cftc.gov contains ftc.gov)
     selector: 'article .field--name-body',
     title: 'title',

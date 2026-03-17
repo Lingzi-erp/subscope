@@ -116,5 +116,6 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   // ── Regulation ──
   S('https://ec.europa.eu/commission/presscorner/home/en', 'reg/eu'),
   S('https://www.ftc.gov/feeds/press-release.xml', 'reg/ftc'),
+  S('https://www.fcc.gov/news-events/headlines', 'reg/fcc'),
   S('https://www.cftc.gov/PressRoom/PressReleases', 'econ/cftc'),
 ]

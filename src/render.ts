@@ -44,6 +44,7 @@ const BRAND: [string, number][] = [
   ['opec', 178], ['opec.org', 178], ['irena', 77],
   ['un', 75], ['who', 39], ['iaea', 220], ['wto', 33],
   ['eu', 33], ['ec.europa', 33],
+  ['fcc', 69], ['fcc.gov', 69],
   ['cftc', 33], ['cftc.gov', 33],  // before ftc (cftc contains ftc)
   ['ftc', 107], ['ftc.gov', 107],
   ['nato', 27], ['nato.int', 27],
@@ -131,6 +132,7 @@ const DISPLAY: [string, string][] = [
   ['news.un.org', 'UN News'], ['who.int', 'WHO'],
   ['iaea.org', 'IAEA'], ['wto.org', 'WTO'],
   ['ec.europa.eu', 'EU Commission'],
+  ['fcc.gov', 'FCC'],
   ['cftc.gov', 'CFTC'], ['ftc.gov', 'FTC'],  // cftc before ftc
   ['nato.int', 'NATO'],
   ['oecd.org', 'OECD'],
