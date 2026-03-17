@@ -56,6 +56,7 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   S('https://www.ecb.europa.eu/rss/press.html', 'econ/ecb'),
   S('https://www.pbc.gov.cn/goutongjiaoliu/113456/113469/index.html', 'econ/pboc'),
   S('https://www.boj.or.jp/en/about/press/index.htm', 'econ/boj'),
+  S('https://www.bankofengland.co.uk/rss/news', 'econ/boe'),
 
   // ── Economics / China Regulators ──
   S('https://www.stats.gov.cn/sj/zxfb/', 'econ/nbs'),

@@ -139,6 +139,12 @@ export const econRules: SiteRule[] = [
     cleanTitle: t => t.replace(/\s*[-–—_]\s*国家金融监督管理总局.*$/, '').trim(),
   },
   {
+    test: u => u.includes('bankofengland.co.uk'),
+    selector: '.page-content, .content-block',
+    title: 'h1, .page-banner h1, title',
+    cleanTitle: t => t.replace(/\s*[|–—-]\s*Bank of England$/, '').trim(),
+  },
+  {
     test: u => u.includes('boj.or.jp'),
     selector: 'div.outline, main#contents',
     title: 'main#contents h1, h1',
