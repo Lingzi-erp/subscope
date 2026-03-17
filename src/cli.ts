@@ -294,9 +294,32 @@ Write-Output "ok"
 
   auth: async () => {
     const service = args[0]
-    if (!service || !['x', 'academic'].includes(service)) {
+    if (!service || !['x', 'academic', 'reuters'].includes(service)) {
       console.log('\n  subscope auth x <token>        X/Twitter auth_token cookie')
-      console.log('  subscope auth academic <cookies>  Academic publisher cookies\n')
+      console.log('  subscope auth academic <cookies>  Academic publisher cookies')
+      console.log('  subscope auth reuters <cookie>    Datadome cookie for Reuters\n')
+      return
+    }
+
+    if (service === 'reuters') {
+      let cookie = args[1]
+      if (!cookie) {
+        const clip = readClipboard()
+        if (clip.length > 30 && !clip.includes(' ')) {
+          cookie = clip
+          console.log('\n  Read datadome cookie from clipboard.')
+        } else {
+          console.log('\n  Open reuters.com, pass the Datadome check, then:')
+          console.log('  F12 → Application → Cookies → reuters.com → datadome')
+          console.log('  Copy the value, then run: subscope auth reuters')
+          console.log('  (reads from clipboard automatically)\n')
+          return
+        }
+      }
+      const auth = loadAuth()
+      auth.reuters = { datadome: cookie }
+      saveAuth(auth)
+      console.log('\n  Reuters datadome cookie saved.\n')
       return
     }
 
