@@ -123,6 +123,12 @@ export const aiRules: SiteRule[] = [
       return $body
     },
   },
+  {
+    test: u => u.includes('nvidianews.nvidia.com') || u.includes('nvidia.com/blog'),
+    selector: '.article-body, article, main',
+    title: 'h1',
+    cleanTitle: t => t.replace(/\s*[|–—]\s*NVIDIA$/, '').trim(),
+  },
   // ── Other ──
   {
     test: u => u.includes('github.com') && /\/releases\/tag\//.test(u),

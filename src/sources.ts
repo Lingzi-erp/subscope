@@ -35,6 +35,9 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   // ── AI / Google ──
   S('https://blog.google/technology/ai/rss/', 'ai/google'),
 
+  // ── AI / Nvidia ──
+  S('https://nvidianews.nvidia.com/rss.xml', 'ai/nvidia'),
+
   // ── AI / DeepMind ──
   S('https://deepmind.google/blog/rss.xml', 'ai/deepmind'),
   S('https://www.youtube.com/@GoogleDeepMind', 'ai/deepmind', 'youtube'),
