@@ -7,7 +7,7 @@ subscope                          interactive browser (default: ai mode, last 14
 subscope ai                       AI company websites (default)
 subscope quick                    social media only (X + YouTube)
 subscope eco                      economics & finance (15 econ/* sources)
-subscope glob                     global news (17 news/* sources)
+subscope glob                     global news (18 news/* sources)
 subscope --all / -a               no time filter
 subscope -n <count>               limit to N items (non-interactive output)
 subscope -g <group>               filter by group (prefix match: -g ai matches ai/*)
@@ -123,7 +123,7 @@ Built-in modes (from code, not saved to config):
 - `ai` (default) -- website sources in `ai/*` groups
 - `quick` -- source types `youtube`, `twitter`
 - `eco` -- group prefix `econ` (15 sources: Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA, CFPB)
-- `glob` -- group prefix `news` (17 sources: BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA)
+- `glob` -- group prefix `news` (18 sources: BBC, France24, DW, NHK, Al Jazeera, Reuters, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA)
 
 Other groups (use `-g` flag): `energy` (IEA, EIA, DOE, OPEC, IRENA), `intl` (UN, WHO, IAEA, WTO), `reg` (EU Commission, FTC).
 

@@ -10,7 +10,7 @@ subscope is a personal CLI intelligence feed. It pulls first-hand information fr
 
 - Pure raw information, no AI processing in the feed pipeline
 - Each source gets the best possible adapter, not a generic one
-- Fast: 62 sources fetch via serve daemon (warm connections, unlimited concurrency) or 12 cold workers in ~3 seconds
+- Fast: 63 sources fetch via serve daemon (warm connections, unlimited concurrency) or 12 cold workers in ~3 seconds
 - Playwright as last-resort fallback in reader pipeline only (no feed adapter requires it), not in the hot path
 - Code should read like it was written by someone who cares
 
@@ -70,6 +70,7 @@ src/
       ftc.ts                FTC press releases (RSS)
       opec.ts               OPEC press releases (HTML via curl)
       irena.ts              IRENA news (HTML via cffi)
+      reuters.ts            Reuters world news (HTML via cffi, Datadome bypass)
       tass.ts               TASS news (HTML via cffi)
       cctv.ts               CCTV JSONP cmsdatainterface API
       xinhua.ts             Xinhua news scraper (/china/ → /politics/)
@@ -111,7 +112,7 @@ Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. S
 Fifteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), BOJ (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API via cffi), US Treasury (HTML scrape), IMF (cffi with Safari TLS), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (JSON API — `/cn/static/data/DocInfo/` endpoint, no Playwright needed), CFPB (RSS). Most have dedicated adapters; CFPB uses the generic website adapter.
 
 ### Global news sources
-Seventeen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (JSON API), Al Jazeera (RSS), TASS (HTML via cffi — RSS is dead/stale), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), Anadolu Agency (RSS), CNA/Channel NewsAsia (RSS), CCTV (JSONP cmsdatainterface API), Xinhua (HTML scrape, /china/ remapped to /politics/), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
+Eighteen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (JSON API), Al Jazeera (RSS), TASS (HTML via cffi — RSS is dead/stale), Reuters (HTML via cffi — Datadome anti-bot, dates from URL slugs), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), Anadolu Agency (RSS), CNA/Channel NewsAsia (RSS), CCTV (JSONP cmsdatainterface API), Xinhua (HTML scrape, /china/ remapped to /politics/), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
 
 ### Energy sources
 Five sources under `energy/`: IEA (HTML scrape from iea.org/news), EIA (RSS via cffi — Bun's TLS blocked by eia.gov), DOE (energy.gov/newsroom, generic website adapter), OPEC (HTML scrape via curl — Cloudflare blocks Bun's BoringSSL), IRENA (HTML scrape via cffi — Azure WAF blocks Chrome TLS fingerprint).
@@ -129,7 +130,7 @@ Two sources under `reg/`: EU Commission (JSON API at `ec.europa.eu/commission/pr
 Pipe-friendly full-text extractor for LLM consumption. Output: `# Title\n\ntext`. Per-site CSS selectors for all blog-type sources:
 - **AI**: Anthropic (CSS modules `Body-module`), Claude blog (`.u-rich-text-blog`), Claude Support (`.article_body`), OpenAI (`article`), Google AI Blog (`article` with AI-summary strip), NVIDIA (`article-body`), DeepMind (`main`), DeepSeek (`.theme-doc-markdown`), xAI (`.prose.prose-invert`)
 - **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), BOJ (`div.outline`), NBS (`.txt-content`), BLS (`#bodytext` with `<pre>` conversion, Sec-Fetch headers), BEA (`.field--name-body`), Treasury (`og:description` meta fallback), IMF (`article .column-padding`), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle in reader), CFPB (`.m-full-width-text`), EIA (`.tie-article` via cffi), IEA (`article` with metadata strip), IAEA (`article, .field--name-body`), WTO (`.centerCol`), EU (JSON API bypass for Angular SPA), FTC (`.node__content .field--name-body`), UN News (`.paragraph--type--one-column-text`), WHO (`article`)
-- **News**: BBC (`data-component` text blocks), France24 (`.t-content__body`), DW (`.rich-text`), NHK (generic fallback), Al Jazeera (`.wysiwyg`), TASS (`.text-content`), Yonhap (`article.story-news > p`), AP News (`.RichTextStoryBody`), ABC Australia (`engagement_target`), CBC (`.story > p/h2`), Focus Taiwan (`.PrimarySide .paragraph`), The Hindu (`.articlebodycontent`), Anadolu Agency (`.detay-icerik`), CNA (`.content-wrapper`), People's Daily (`.rm_txt_con`), CCTV (`.content_area`), Xinhua (`#detailContent`)
+- **News**: BBC (`data-component` text blocks), France24 (`.t-content__body`), DW (`.rich-text`), NHK (generic fallback), Al Jazeera (`.wysiwyg`), Reuters (`article, main` via cffi — Datadome-protected), TASS (`.text-content`), Yonhap (`article.story-news > p`), AP News (`.RichTextStoryBody`), ABC Australia (`engagement_target`), CBC (`.story > p/h2`), Focus Taiwan (`.PrimarySide .paragraph`), The Hindu (`.articlebodycontent`), Anadolu Agency (`.detay-icerik`), CNA (`.content-wrapper`), People's Daily (`.rm_txt_con`), CCTV (`.content_area`), Xinhua (`#detailContent`)
 - **Other**: GitHub releases (`[data-test-selector="body-content"]`)
 - Anti-bot bypass: Playwright (last-resort fallback in reader) spawns system Chrome with `--disable-blink-features=AutomationControlled`, `navigator.webdriver=false`, `--ignore-certificate-errors`
 - Tables: colspan/rowspan grid extraction, compound headers flattened to `Group: Column` format
@@ -175,7 +176,7 @@ If the site has RSS or standard HTML, the generic website adapter handles it aut
 - Text cleanup: `cleanTweetText()` strips t.co links. `cleanText()` strips HTML tags and collapses whitespace.
 - TLS: `TLS(url)` helper in `lib.ts` conditionally sets `rejectUnauthorized: false` only for hosts in the `INSECURE_HOSTS` whitelist (US gov, EU institutions, Chinese gov CDNs). Not applied globally.
 - HTTP strategies: Three fetch methods in `lib.ts` for different anti-bot scenarios: `fetchWithCffi` (Python curl_cffi, impersonates Safari/Chrome TLS fingerprint — bypasses Azure WAF, Cloudflare JA3/JA4), `fetchWithCurl` (curl with Client Hints — bypasses Cloudflare BoringSSL blocking), `fetchPage` (cffi-first with Bun spawnSync fallback). Most adapters use plain `fetch()` + `TLS()` directly.
-- Anti-bot: BLS requires full `Sec-Fetch-*` browser headers. SEC EDGAR uses cffi with declared User-Agent. IMF uses cffi with Safari impersonation. CSRC uses UCAP CMS JSON API to bypass TLS fingerprinting. NFRA uses JSON API directly (no Playwright). OPEC uses curl (Cloudflare). IRENA uses cffi (Azure WAF). Angular SPA auto-detected (`{{data.` + `ng-controller`) and retried with Playwright `networkidle` in reader fallback path.
+- Anti-bot: BLS requires full `Sec-Fetch-*` browser headers. SEC EDGAR uses cffi with declared User-Agent. IMF uses cffi with Safari impersonation. Reuters uses cffi (Datadome anti-bot on both feed and article pages). CSRC uses UCAP CMS JSON API to bypass TLS fingerprinting. NFRA uses JSON API directly (no Playwright). OPEC uses curl (Cloudflare). IRENA uses cffi (Azure WAF). Angular SPA auto-detected (`{{data.` + `ng-controller`) and retried with Playwright `networkidle` in reader fallback path.
 
 ## Testing
 

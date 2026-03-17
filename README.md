@@ -6,7 +6,7 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 First-hand information from official sources only — no intermediaries, no aggregators, no SEO-polluted search results. Five dimensions: AI companies, central banks & financial regulators, global official media, energy agencies, and international organizations.
 
-67 sources across 6 groups: AI (Anthropic, Claude, OpenAI, Google AI, NVIDIA, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA, CFPB), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA), energy (IEA, EIA, DOE, OPEC, IRENA), international orgs (UN, WHO, IAEA, WTO), regulation (EU Commission, FTC). All sources hardcoded in `src/sources.ts`.
+68 sources across 6 groups: AI (Anthropic, Claude, OpenAI, Google AI, NVIDIA, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA, CFPB), global news (BBC, France24, DW, NHK, Al Jazeera, Reuters, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu, Anadolu Agency, CNA), energy (IEA, EIA, DOE, OPEC, IRENA), international orgs (UN, WHO, IAEA, WTO), regulation (EU Commission, FTC). All sources hardcoded in `src/sources.ts`.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ subscope auth academic       # Papers: copy Cookie header from nature.com, run t
 Fetch and read:
 
 ```
-subscope fetch               # pull all sources (67 sources, ~3s)
+subscope fetch               # pull all sources (68 sources, ~3s)
 subscope                     # interactive browser with search
 ```
 
@@ -36,7 +36,7 @@ subscope                     # browse items (up/down, enter to open, / to search
 subscope ai                  # AI company websites (default mode)
 subscope quick               # social media only (X + YouTube)
 subscope eco                 # economics & finance (15 sources)
-subscope glob                # global news (17 sources)
+subscope glob                # global news (18 sources)
 subscope -g energy           # energy sources (5 sources)
 subscope -g reg              # regulation (EU Commission, FTC)
 subscope --all               # no time filter
@@ -103,7 +103,7 @@ Source (hardcoded registry) --> Adapter (fetch + parse) --> Store (SQLite) --> R
                               Serve daemon (warm pool)    CLI or daemon
 ```
 
-Site-specific adapters: Anthropic (Sanity CMS GROQ API), Claude blog (HTML), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API via cffi), US Treasury (HTML scrape), IMF (cffi with Safari TLS), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (JSON API), CCTV (JSONP API), NHK (JSON API), OPEC (HTML via curl), IRENA (HTML via cffi), TASS (HTML via cffi), EU Commission (JSON API), FTC (RSS).
+Site-specific adapters: Anthropic (Sanity CMS GROQ API), Claude blog (HTML), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API via cffi), US Treasury (HTML scrape), IMF (cffi with Safari TLS), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (JSON API), CCTV (JSONP API), NHK (JSON API), Reuters (HTML via cffi, Datadome bypass), OPEC (HTML via curl), IRENA (HTML via cffi), TASS (HTML via cffi), EU Commission (JSON API), FTC (RSS).
 
 Generic adapters: RSS/Atom feeds (auto-detect XML), HTML scraping (link extraction), YouTube (ytInitialData JSON), X/Twitter (Guest Token + GraphQL API), GitHub (Atom release feeds).
 
@@ -142,7 +142,7 @@ econ/
   nfra        (金融监管总局 banking/insurance regulation)
   cfpb        (Consumer Financial Protection Bureau rss)
 news/
-  bbc, france24, dw, nhk, aljazeera, tass, yonhap, abc-au, cbc
+  bbc, france24, dw, nhk, aljazeera, reuters, tass, yonhap, abc-au, cbc
   ap, focustw, thehindu, aa (Anadolu Agency), cna (Channel NewsAsia)
   cctv (world + china), xinhua (world + china), people
 energy/
