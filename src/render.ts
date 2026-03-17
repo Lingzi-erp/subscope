@@ -22,6 +22,7 @@ const c = (n: number) => `\x1b[38;5;${n}m`
 const BRAND: [string, number][] = [
   ['anthropic', 208], ['claude', 216],
   ['openai', 114], ['deepmind', 75], ['deepseek', 80],
+  ['blog.google', 33], ['google', 33],
   ['xai', 231], ['x.ai', 231], ['grok', 231],
   ['github', 248],
   ['fed', 39], ['federalreserve', 39],
@@ -42,6 +43,8 @@ const BRAND: [string, number][] = [
   ['un', 75], ['who', 39], ['iaea', 220], ['wto', 33],
   ['eu', 33], ['ec.europa', 33],
   ['ftc', 107], ['ftc.gov', 107],
+  ['cftc', 33], ['cftc.gov', 33],
+  ['nato', 27], ['nato.int', 27],
 ]
 
 const sourceColor = (name: string, _type: string, group?: string): string => {
@@ -104,6 +107,7 @@ const DISPLAY: [string, string][] = [
   ['mof.gov.cn', '\u8d22\u653f\u90e8'], ['safe.gov.cn', '\u5916\u6c47\u7ba1\u7406\u5c40'],
   ['nfra.gov.cn', '\u91d1\u878d\u76d1\u7ba1\u603b\u5c40'],
   ['csrc.gov.cn', '\u8bc1\u76d1\u4f1a'],
+  ['blog.google', 'Google AI Blog'],
   ['nhk.or.jp', 'NHK World'],
   ['rss.dw.com', 'Deutsche Welle'], ['dw.com', 'Deutsche Welle'],
   ['feeds.bbci.co.uk', 'BBC World'], ['bbc.com', 'BBC'],
@@ -120,6 +124,7 @@ const DISPLAY: [string, string][] = [
   ['news.un.org', 'UN News'], ['who.int', 'WHO'],
   ['iaea.org', 'IAEA'], ['wto.org', 'WTO'],
   ['ec.europa.eu', 'EU Commission'], ['ftc.gov', 'FTC'],
+  ['cftc.gov', 'CFTC'], ['nato.int', 'NATO'],
 ]
 
 export const formatSourceName = (name: string): string => {

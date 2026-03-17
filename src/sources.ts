@@ -32,6 +32,9 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   S('https://www.youtube.com/@OpenAI', 'ai/openai', 'youtube'),
   S('https://x.com/OpenAI', 'ai/openai', 'twitter'),
 
+  // ── AI / Google ──
+  S('https://blog.google/technology/ai/rss/', 'ai/google'),
+
   // ── AI / DeepMind ──
   S('https://deepmind.google/blog/rss.xml', 'ai/deepmind'),
   S('https://www.youtube.com/@GoogleDeepMind', 'ai/deepmind', 'youtube'),
@@ -99,7 +102,11 @@ export const SOURCE_REGISTRY: SourceDef[] = [
   S('https://www.iaea.org/newscenter/pressreleases', 'intl/iaea'),
   S('https://www.wto.org/english/news_e/news_e.htm', 'intl/wto'),
 
+  // ── International Organizations ── (continued)
+  S('https://www.nato.int/content/nato/en/news-and-events/articles/news/jcr:content/root/container/general_search.search.json', 'intl/nato'),
+
   // ── Regulation ──
   S('https://ec.europa.eu/commission/presscorner/home/en', 'reg/eu'),
   S('https://www.ftc.gov/feeds/press-release.xml', 'reg/ftc'),
+  S('https://www.cftc.gov/PressRoom/PressReleases', 'econ/cftc'),
 ]
