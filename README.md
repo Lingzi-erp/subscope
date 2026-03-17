@@ -6,7 +6,7 @@ A super subscription that merges multiple first-hand sources into one terminal f
 
 First-hand information from official sources only — no intermediaries, no aggregators, no SEO-polluted search results. Five dimensions: AI companies, central banks & financial regulators, global official media, energy agencies, and international organizations.
 
-58 sources across 5 groups: AI (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), energy (IEA, EIA), international orgs (UN, WHO, IAEA, WTO). All sources hardcoded in `src/sources.ts`.
+62 sources across 6 groups: AI (Anthropic, Claude, OpenAI, DeepMind, DeepSeek, xAI), economics (Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA), global news (BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC Australia, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu), energy (IEA, EIA, DOE, OPEC, IRENA), international orgs (UN, WHO, IAEA, WTO), regulation (EU Commission, FTC). All sources hardcoded in `src/sources.ts`.
 
 ## Quick start
 
@@ -25,7 +25,7 @@ subscope auth academic       # Papers: copy Cookie header from nature.com, run t
 Fetch and read:
 
 ```
-subscope fetch               # pull all sources (58 sources, ~3s)
+subscope fetch               # pull all sources (62 sources, ~3s)
 subscope                     # interactive browser with search
 ```
 
@@ -37,6 +37,8 @@ subscope ai                  # AI company websites (default mode)
 subscope quick               # social media only (X + YouTube)
 subscope eco                 # economics & finance (14 sources)
 subscope glob                # global news (15 sources)
+subscope -g energy           # energy sources (5 sources)
+subscope -g reg              # regulation (EU Commission, FTC)
 subscope --all               # no time filter
 subscope -n 10               # latest 10
 subscope -g ai/anthropic     # filter by group
@@ -58,6 +60,14 @@ Article reader and JSON output (pipe-friendly for LLMs):
 subscope read <url>          # extract clean article text from any source
 subscope read <url> | llm    # pipe to LLM for analysis
 subscope glob -j 20 | llm   # feed latest 20 news items as JSON to LLM
+```
+
+Server daemon (auto-started on first fetch):
+
+```
+subscope serve               # start localhost daemon (keeps connections warm)
+subscope serve status        # check if running
+subscope serve stop          # stop daemon
 ```
 
 Management:
@@ -87,16 +97,19 @@ The default `subscope` command opens an interactive browser:
 ## Architecture
 
 ```
-Source (YAML) --> Adapter (fetch + parse) --> Store (SQLite) --> Render (TUI)
+Source (hardcoded registry) --> Adapter (fetch + parse) --> Store (SQLite) --> Render (TUI)
+                                     ^                          ^
+                                     |                          |
+                              Serve daemon (warm pool)    CLI or daemon
 ```
 
-Site-specific adapters: Anthropic (RSC JSON payload), Claude blog (HTML articles), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA).
+Site-specific adapters: Anthropic (Sanity CMS GROQ API), Claude blog (HTML), Claude support (Intercom), DeepSeek (changelog HTML), xAI (news page), PBOC (HTML scrape), NBS (RSS + HTML), BLS (RSS indicator parser), BEA (HTML scrape), SEC EDGAR (JSON API via cffi), US Treasury (HTML scrape), IMF (cffi with Safari TLS), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (JSON API), CCTV (JSONP API), NHK (JSON API), OPEC (HTML via curl), IRENA (HTML via cffi), TASS (HTML via cffi), EU Commission (JSON API), FTC (RSS).
 
-Generic adapters: RSS/Atom feeds (auto-detect XML), HTML scraping (link extraction), YouTube (ytInitialData JSON), X/Twitter (native GraphQL API), GitHub (Atom release feeds).
+Generic adapters: RSS/Atom feeds (auto-detect XML), HTML scraping (link extraction), YouTube (ytInitialData JSON), X/Twitter (Guest Token + GraphQL API), GitHub (Atom release feeds).
 
-X/Twitter calls the same GraphQL endpoints the web app uses. Thread merging via conversation_id. No Playwright, no syndication, no paid API.
+X/Twitter uses public guest tokens and GraphQL endpoints — same as the web app. Thread merging via conversation_id. No auth needed, no Playwright, no paid API.
 
-Sources fetch with 12 concurrent workers (avoids DNS/TLS congestion). Each source streams to terminal as it completes with per-source timing. Failed sources retried up to 3 times. Individual failures don't block others.
+`subscope fetch` auto-starts a background daemon (`subscope serve`) that keeps DNS/TLS/connection pools warm. Subsequent fetches proxy through the daemon via SSE streaming with unlimited concurrency. Cold fallback: 12 concurrent workers. Each source streams to terminal as it completes with per-source timing. Failed sources retried up to 3 times. Individual failures don't block others.
 
 ## Groups
 
@@ -130,10 +143,17 @@ news/
   ap, focustw, thehindu
   cctv (world + china), xinhua (world + china), people
 energy/
-  iea, eia
+  iea         (HTML scrape)
+  eia         (RSS via cffi)
+  doe         (energy.gov newsroom, generic adapter)
+  opec        (HTML via curl, Cloudflare bypass)
+  irena       (HTML via cffi, Azure WAF bypass)
 intl/
   un, who, iaea
   wto         (news via JS data file, not RSS)
+reg/
+  eu          (EU Commission press releases, JSON API)
+  ftc         (FTC press releases, RSS)
 ```
 
 ## Stack
@@ -147,6 +167,8 @@ TypeScript, Bun (runtime + bun:sqlite), cheerio, yaml. Playwright as optional fa
 ~/.subscope/subscope.db      SQLite feed cache
 ~/.subscope/auth.yml         X auth_token + academic cookies
 ~/.subscope/seen.json        read tracking for NEW badges
+~/.subscope/x-uid-cache.json X/Twitter user ID cache
+~/.subscope/serve.json       daemon port/PID (auto-managed)
 ```
 
 ## License

@@ -37,7 +37,7 @@ NEW badge appears on unseen items. Disappears when you scroll past them. Seen st
 subscope read <url>               fetch article and output clean text (# Title + body)
 ```
 
-Outputs `# Title\n\ntext` format — pipe-friendly for LLMs. Per-site extractors for all blog-type sources (AI companies + economics institutions). Falls back to Playwright browser for anti-bot sites (BLS, IMF) and Angular SPAs (NFRA — auto-detected and retried with `networkidle`). Tables rendered as Markdown with compound headers flattened to `Group: Column` format. Example:
+Outputs `# Title\n\ntext` format — pipe-friendly for LLMs. Per-site extractors for all sources (AI companies, economics institutions, news, energy, intl orgs, regulators). Multi-layer fallback: HTTP retry ×3 → cffi (Safari TLS) → curl → Playwright (last resort). Angular SPAs auto-detected and retried with `networkidle`. EU Presscorner uses JSON API directly. Tables rendered as Markdown with compound headers flattened to `Group: Column` format. Example:
 
 ```
 subscope read https://www.federalreserve.gov/newsevents/pressreleases/monetary20260128a.htm
@@ -57,12 +57,23 @@ Output: `[{"title":"...","source":"央视网","url":"...","summary":"...","publi
 ## Fetching
 
 ```
-subscope fetch                    pull all sources (12 concurrent workers)
+subscope fetch                    pull all sources (auto-starts serve daemon)
 subscope fetch -g <group>         fetch only matching group
 subscope fetch --notify           silent mode, sends Windows toast if new items found
 ```
 
-Sources stream to terminal as they complete, with per-source timing. Slow sources (>5s) highlighted in yellow. Failed sources retried up to 3 times. Summary shows total time elapsed.
+First fetch auto-starts a background daemon (`subscope serve`) that keeps connections warm. Subsequent fetches proxy through the daemon via SSE with unlimited concurrency. Fallback: direct fetch with 12 concurrent workers. Sources stream to terminal as they complete, with per-source timing. Slow sources (>5s) highlighted in yellow. Failed sources retried up to 3 times. Summary shows total time elapsed. `⚡serve` indicator appears when using daemon.
+
+## Server daemon
+
+```
+subscope serve                    start localhost HTTP daemon (auto-managed)
+subscope serve <port>             start on specific port
+subscope serve status             check if running (port, PID, uptime)
+subscope serve stop               stop daemon and remove tray icon
+```
+
+Ollama-style daemon that keeps DNS/TLS/connection pools warm between fetches. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Windows system tray icon with context menu. Port file at `~/.subscope/serve.json`. Auto-started by `subscope fetch` — usually no manual management needed.
 
 ## Background monitoring
 
@@ -114,6 +125,8 @@ Built-in modes (from code, not saved to config):
 - `eco` -- group prefix `econ` (14 sources: Fed, ECB, PBOC, BOJ, NBS, BLS, BEA, SEC, Treasury, IMF, CSRC, MOF, SAFE, NFRA)
 - `glob` -- group prefix `news` (15 sources: BBC, France24, DW, NHK, Al Jazeera, TASS, Yonhap, AP, ABC AU, CBC, CCTV, Xinhua, People's Daily, Focus Taiwan, The Hindu)
 
+Other groups (use `-g` flag): `energy` (IEA, EIA, DOE, OPEC, IRENA), `intl` (UN, WHO, IAEA, WTO), `reg` (EU Commission, FTC).
+
 Modes can filter by source type (`types`) and/or group prefix (`groups`). `-g` flag bypasses mode filtering and shows all source types in that group.
 
 ## Auth
@@ -156,4 +169,6 @@ Sources are hardcoded — the TUI only toggles groups and individual sources on/
 ~/.subscope/subscope.db           SQLite feed item cache
 ~/.subscope/auth.yml              X auth_token + academic cookies
 ~/.subscope/seen.json             read tracking for NEW badges
+~/.subscope/x-uid-cache.json     X/Twitter user ID cache
+~/.subscope/serve.json            daemon port/PID (auto-managed)
 ```

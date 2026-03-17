@@ -10,8 +10,8 @@ subscope is a personal CLI intelligence feed. It pulls first-hand information fr
 
 - Pure raw information, no AI processing in the feed pipeline
 - Each source gets the best possible adapter, not a generic one
-- Fast: 58 sources fetch with 12 concurrent workers in ~3 seconds
-- Playwright as optional fallback for anti-bot sites (BLS, IMF) and Angular SPAs (NFRA), not in the hot path
+- Fast: 62 sources fetch via serve daemon (warm connections, unlimited concurrency) or 12 cold workers in ~3 seconds
+- Playwright as last-resort fallback in reader pipeline only (no feed adapter requires it), not in the hot path
 - Code should read like it was written by someone who cares
 
 ## Tech stack
@@ -34,14 +34,18 @@ src/
   render.ts                 Terminal output, interactive browser, colors
   interactive.ts            TUI config (folder toggle, no source management)
   notify.ts                 Windows toast notifications
+  serve.ts                  Localhost daemon (Ollama-style, SSE streaming, system tray)
+  browser.ts                Playwright via node subprocess (anti-bot fallback)
+  lib.ts                    Shared utils (hash, TLS, fetchPage, fetchWithCffi, fetchWithCurl, retry, item)
+  cffi_fetch.py             Python curl_cffi subprocess for TLS impersonation
   adapters/
     index.ts                Adapter registry: URL -> adapter resolution
     website.ts              Generic: RSS auto-detect, HTML scrape fallback
     youtube.ts              Scrapes ytInitialData from channel page
-    twitter.ts              X syndication API (primary) + GraphQL fallback
+    twitter.ts              X Guest Token + GraphQL API (UserTweets)
     github.ts               GitHub Atom release feeds
     sites/
-      anthropic.ts          RSC JSON payload parser (blog/research/engineering)
+      anthropic.ts          Sanity CMS GROQ API (blog/research/engineering)
       claude.ts             Claude.com blog HTML articles
       support-claude.ts     Intercom collection + release notes parser
       deepseek.ts           Changelog page with dated news links
@@ -50,22 +54,32 @@ src/
       nbs.ts                China National Bureau of Statistics (RSS + HTML)
       bls.ts                Bureau of Labor Statistics RSS indicator parser
       bea.ts                Bureau of Economic Analysis releases scraper
-      sec.ts                SEC EDGAR JSON API (filing search)
+      sec.ts                SEC EDGAR JSON API via cffi (filing search)
       treasury.ts           US Treasury press releases scraper
-      imf.ts                IMF news scraper (Playwright fallback)
+      imf.ts                IMF news scraper (cffi with Safari TLS)
       csrc.ts               CSRC UCAP JSON API (证监会要闻)
       mof.ts                Ministry of Finance news scraper (财政部)
       safe.ts               State Administration of Foreign Exchange scraper (外汇管理局)
-      nfra.ts               National Financial Regulatory Administration (Playwright for Angular SPA)
+      nfra.ts               National Financial Regulatory Administration (JSON API)
       boj.ts                Bank of Japan speeches/press HTML scraper
       apnews.ts             AP News hub page scraper (date from URL slug)
+      eia.ts                EIA RSS feed via cffi
       iaea.ts               IAEA press releases scraper
       wto.ts                WTO news via JS data file (/library/news/news_YYYY_e.js)
+      eu.ts                 EU Commission press releases (JSON API)
+      ftc.ts                FTC press releases (RSS)
+      opec.ts               OPEC press releases (HTML via curl)
+      irena.ts              IRENA news (HTML via cffi)
+      tass.ts               TASS news (HTML via cffi)
+      cctv.ts               CCTV JSONP cmsdatainterface API
+      xinhua.ts             Xinhua news scraper (/china/ → /politics/)
+      people.ts             People's Daily scraper
+      nhk.ts                NHK World JSON API
   sources.ts                Hardcoded source registry (all URLs + groups)
   reader/
-    index.ts                Article full-text extractor (core logic + Playwright fallback)
+    index.ts                Article full-text extractor (multi-layer fallback + Playwright last resort)
     types.ts                SiteRule interface
-    econ.ts                 Economics/finance/energy/intl site reader rules
+    econ.ts                 Economics/finance/energy/intl/reg site reader rules
     news.ts                 News media site reader rules
     ai.ts                   AI company + GitHub reader rules
 ```
@@ -73,10 +87,10 @@ src/
 ## Key architectural decisions
 
 ### Adapter pattern
-Each source URL resolves to an adapter via `index.ts`. Site-specific adapters (in `sites/`) match by hostname. Generic adapters (website, youtube, twitter, github) match by URL pattern. Website adapter is the fallback.
+Each source URL resolves to an adapter via `index.ts`. Site-specific adapters (in `sites/`) match by hostname (+ optional path prefix, more specific rules first). Generic adapters (website, youtube, twitter, github) match by URL pattern. Website adapter is the fallback.
 
 ### X/Twitter approach
-Primary: syndication API (`syndication.twitter.com/srv/timeline-profile`) — public embed endpoint, no auth needed, ~0.7s/source, returns ~20 tweets with full thread data via `__NEXT_DATA__` JSON. Fallback: GraphQL API with auth_token cookie (session mutex, user ID cache in `x-uid-cache.json`). Thread merging via `conversation_id_str` with reply-chain walking.
+Guest Token + GraphQL API. `getGuestToken()` (POST to `/1.1/guest/activate.json` with public bearer token, singleton-cached per fetch cycle) → `resolveUserId()` via `UserByScreenName` GraphQL → `fetchUserTweets()` via `UserTweets` GraphQL. User ID cache persisted in `x-uid-cache.json`. Thread merging via `conversation_id_str` with reply-chain walking (`in_reply_to_status_id_str`). No auth needed, no Playwright, no syndication API.
 
 ### YouTube approach
 Fetches `/@handle/videos` page, parses `ytInitialData` JSON from the HTML. Relative dates ("2 weeks ago") converted to ISO timestamps. No API key needed.
@@ -94,16 +108,19 @@ Path-based strings: `ai/anthropic`, `econ/fed`, `news/bbc`. Filtering with `-g a
 Alternate screen buffer. Item-by-item navigation with auto-scrolling viewport. Search box at top (cursor = -1). NEW badges tracked via `seen.json`. PDF download via URL pattern matching (Nature `.pdf` suffix, arXiv `/pdf/` path).
 
 ### Economics & Finance sources
-Fourteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), BOJ (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API), US Treasury (HTML scrape), IMF (Playwright fallback), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (Playwright for Angular SPA). Each has a dedicated adapter.
+Fourteen sources under the `econ/` group: Federal Reserve (RSS), ECB (RSS), PBOC (HTML scrape), BOJ (HTML scrape), NBS (RSS/HTML), BLS (RSS with `Sec-Fetch-*` headers), BEA (HTML scrape), SEC EDGAR (JSON API via cffi), US Treasury (HTML scrape), IMF (cffi with Safari TLS), CSRC (UCAP JSON API), MOF (HTML scrape), SAFE (HTML scrape), NFRA (JSON API — `/cn/static/data/DocInfo/` endpoint, no Playwright needed). Each has a dedicated adapter.
 
 ### Global news sources
-Fifteen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (JSON API), Al Jazeera (RSS), TASS (RSS), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), CCTV (JSONP cmsdatainterface API), Xinhua (HTML scrape, /china/ remapped to /politics/), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
+Fifteen sources under the `news/` group: BBC (RSS), France24 (RSS), DW (RSS), NHK (JSON API), Al Jazeera (RSS), TASS (HTML via cffi — RSS is dead/stale), Yonhap (RSS), AP News (HTML scrape), ABC Australia (RSS), CBC (RSS), Focus Taiwan (RSS), The Hindu (RSS), CCTV (JSONP cmsdatainterface API), Xinhua (HTML scrape, /china/ remapped to /politics/), People's Daily (HTML scrape). Chinese news sources use `dateOnlyToISO` for date-only URLs (noon local time, avoids UTC midnight sort issues).
 
 ### Energy sources
-Two sources under `energy/`: IEA (HTML scrape from iea.org/news), EIA (HTML scrape from eia.gov/todayinenergy — SPA, auto-detected and rendered via Playwright fallback for reader).
+Five sources under `energy/`: IEA (HTML scrape from iea.org/news), EIA (RSS via cffi — Bun's TLS blocked by eia.gov), DOE (energy.gov/newsroom, generic website adapter), OPEC (HTML scrape via curl — Cloudflare blocks Bun's BoringSSL), IRENA (HTML scrape via cffi — Azure WAF blocks Chrome TLS fingerprint).
 
 ### International organization sources
 Four sources under `intl/`: UN News (RSS), WHO (RSS), IAEA (dedicated adapter scraping h3.card__title links from pressreleases page), WTO (dedicated adapter parsing /library/news/news_YYYY_e.js data file — structured JS objects with titles, summaries, dates).
+
+### Regulation sources
+Two sources under `reg/`: EU Commission (JSON API at `ec.europa.eu/commission/presscorner/api/search`, filtered to press releases), FTC (RSS feed at ftc.gov/feeds/press-release.xml).
 
 ### JSON output (`-j`)
 `subscope glob -j 20` outputs clean JSON array: `[{title, source, url, summary, publishedAt}]`. Source names formatted for readability (e.g., "央视网" not "news.cctv.com/world"). Pipe-friendly for LLMs.
@@ -111,10 +128,10 @@ Four sources under `intl/`: UN News (RSS), WHO (RSS), IAEA (dedicated adapter sc
 ### Article reader (`subscope read`)
 Pipe-friendly full-text extractor for LLM consumption. Output: `# Title\n\ntext`. Per-site CSS selectors for all blog-type sources:
 - **AI**: Anthropic (CSS modules `Body-module`), Claude blog (`.u-rich-text-blog`), Claude Support (`.article_body`), OpenAI (`article`), DeepMind (`main`), DeepSeek (`.theme-doc-markdown`), xAI (`.prose.prose-invert`)
-- **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), BOJ (`div.outline`), NBS (`.txt-content`), BLS (Playwright + Chrome anti-detection), BEA (`.field--name-body`), Treasury (`og:description` meta), IMF (`article .column-padding` via Playwright), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle), EIA (`.tie-article`), IEA (`article`), IAEA (`article, .field--name-body`), WTO (`.centerCol`)
+- **Econ**: Fed (`#article .col-sm-8`), ECB (`main .section`), PBOC (`#zoom`), BOJ (`div.outline`), NBS (`.txt-content`), BLS (`#bodytext` with `<pre>` conversion, Sec-Fetch headers), BEA (`.field--name-body`), Treasury (`og:description` meta fallback), IMF (`article .column-padding`), SEC EDGAR (auto-follow `-index.htm` → document, company name from submissions API), CSRC (`.detail-news`), MOF (`.xwfb_content`), SAFE (`.detail_content`), NFRA (Angular auto-detect → Playwright networkidle in reader), EIA (`.tie-article` via cffi), IEA (`article` with metadata strip), IAEA (`article, .field--name-body`), WTO (`.centerCol`), EU (JSON API bypass for Angular SPA), FTC (`.node__content .field--name-body`), UN News (`.paragraph--type--one-column-text`), WHO (`article`)
 - **News**: BBC (`data-component` text blocks), France24 (`.t-content__body`), DW (`.rich-text`), NHK (generic fallback), Al Jazeera (`.wysiwyg`), TASS (`.text-content`), Yonhap (`article.story-news > p`), AP News (`.RichTextStoryBody`), ABC Australia (`engagement_target`), CBC (`.story > p/h2`), Focus Taiwan (`.PrimarySide .paragraph`), The Hindu (`.articlebodycontent`), People's Daily (`.rm_txt_con`), CCTV (`.content_area`), Xinhua (`#detailContent`)
 - **Other**: GitHub releases (`[data-test-selector="body-content"]`)
-- Anti-bot bypass: Playwright spawns system Chrome with `--disable-blink-features=AutomationControlled`, `navigator.webdriver=false`, `--ignore-certificate-errors`
+- Anti-bot bypass: Playwright (last-resort fallback in reader) spawns system Chrome with `--disable-blink-features=AutomationControlled`, `navigator.webdriver=false`, `--ignore-certificate-errors`
 - Tables: colspan/rowspan grid extraction, compound headers flattened to `Group: Column` format
 - Dedup: headings matching title auto-removed; share buttons, video tags, nav stripped
 
@@ -123,12 +140,13 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 
 ## Data flow
 
-1. `subscope fetch`: load config -> resolve adapters -> 12 concurrent workers fetch sources -> retry up to 3x on failure -> store.save (INSERT OR IGNORE) -> stream results to terminal with per-source timing
-2. `subscope` (read): load config -> activeSources (filter by mode + group) -> store.query (filter by sourceId, since) -> render
+1. `subscope fetch`: ensureServe() auto-starts background daemon → proxy fetch via SSE stream (warm connections, unlimited concurrency). Fallback: direct fetch with 12 concurrent workers. Both paths: resolve adapters → retry up to 3x → store.save (INSERT OR IGNORE) → stream results to terminal with per-source timing.
+2. `subscope` (read): load config → activeSources (filter by mode + group) → store.query (filter by sourceId, since) → render
+3. `subscope serve`: Ollama-style localhost HTTP daemon. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Keeps DNS/TLS/connection pool warm. Windows system tray icon via PowerShell. Port file at `~/.subscope/serve.json`.
 
 ## Config location
 
-`~/.subscope/` on all platforms. Contains `config.yml`, `subscope.db`, `auth.yml`, `seen.json`.
+`~/.subscope/` on all platforms. Contains `config.yml`, `subscope.db`, `auth.yml`, `seen.json`, `x-uid-cache.json`, `serve.json`.
 
 ## Adding a new source
 
@@ -138,7 +156,7 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 4. Add brand color in `render.ts` BRAND array and display name in DISPLAY array
 5. Test both `subscope fetch -g <group>` and `subscope read <article_url>`
 
-If the site has RSS or standard HTML, the generic website adapter handles it automatically. No new adapter code needed, but reader rules and colors still required.
+If the site has RSS or standard HTML, the generic website adapter handles it automatically. No new adapter code needed, but reader rules and colors still required. For sites blocking Bun's TLS, use `fetchWithCffi()` (Safari impersonation) or `fetchWithCurl()` (Client Hints) from `lib.ts`.
 
 ## Adding a new generic adapter
 
@@ -155,8 +173,9 @@ If the site has RSS or standard HTML, the generic website adapter handles it aut
 - Dedup: hash-based IDs, `INSERT OR IGNORE` in SQLite
 - Error handling: adapters throw on auth issues, return `[]` on parse failures. Pipeline retries each source up to 3 times (`retry()` in lib.ts) with backoff. 12 concurrent workers via queue-based semaphore (avoids DNS/TLS congestion from 50+ simultaneous connections). Individual failures don't block others.
 - Text cleanup: `cleanTweetText()` strips t.co links. `cleanText()` strips HTML tags and collapses whitespace.
-- TLS: all fetch calls use `tls: { rejectUnauthorized: false }` (Bun-specific) to handle proxy/cert issues with government sites.
-- Anti-bot: BLS requires full `Sec-Fetch-*` browser headers. SEC EDGAR requires declared User-Agent. BLS/IMF article pages use Playwright with system Chrome as fallback. CSRC uses UCAP CMS JSON API to bypass TLS fingerprinting. NFRA Angular SPA auto-detected (`{{data.` + `ng-controller`) and retried with Playwright `networkidle`.
+- TLS: `TLS(url)` helper in `lib.ts` conditionally sets `rejectUnauthorized: false` only for hosts in the `INSECURE_HOSTS` whitelist (US gov, EU institutions, Chinese gov CDNs). Not applied globally.
+- HTTP strategies: Three fetch methods in `lib.ts` for different anti-bot scenarios: `fetchWithCffi` (Python curl_cffi, impersonates Safari/Chrome TLS fingerprint — bypasses Azure WAF, Cloudflare JA3/JA4), `fetchWithCurl` (curl with Client Hints — bypasses Cloudflare BoringSSL blocking), `fetchPage` (cffi-first with Bun spawnSync fallback). Most adapters use plain `fetch()` + `TLS()` directly.
+- Anti-bot: BLS requires full `Sec-Fetch-*` browser headers. SEC EDGAR uses cffi with declared User-Agent. IMF uses cffi with Safari impersonation. CSRC uses UCAP CMS JSON API to bypass TLS fingerprinting. NFRA uses JSON API directly (no Playwright). OPEC uses curl (Cloudflare). IRENA uses cffi (Azure WAF). Angular SPA auto-detected (`{{data.` + `ng-controller`) and retried with Playwright `networkidle` in reader fallback path.
 
 ## Testing
 
@@ -178,7 +197,7 @@ When a commit changes functionality, immediately follow with a separate docs com
 
 ## Platform notes
 
-- Bun + Playwright doesn't work on Windows (pipe communication bug, oven-sh/bun#27977). Playwright is used via `node -e` subprocess for article reading (BLS, IMF, NFRA) and feed fetching (NFRA) — not through Bun directly. `fetchWithBrowser` supports `waitUntil` parameter (`domcontentloaded` default, `networkidle` for Angular SPAs).
+- Bun + Playwright doesn't work on Windows (pipe communication bug, oven-sh/bun#27977). Playwright is used via `node -e` subprocess as a last-resort fallback in the reader pipeline — not through Bun directly. `fetchWithBrowser` in `browser.ts` supports `waitUntil` parameter (`domcontentloaded` default, `networkidle` for Angular SPAs). No feed adapter currently requires Playwright (NFRA switched to JSON API, IMF uses cffi).
 - Windows toast notifications via PowerShell inline script.
 - Clipboard read via `powershell Get-Clipboard`.
 - `cmd /c start` to open URLs in default browser.
