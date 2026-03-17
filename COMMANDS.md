@@ -73,7 +73,7 @@ subscope serve status             check if running (port, PID, uptime)
 subscope serve stop               stop daemon and remove tray icon
 ```
 
-Ollama-style daemon that keeps DNS/TLS/connection pools warm between fetches. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Windows system tray icon with context menu. Port file at `~/.subscope/serve.json`. Auto-started by `subscope fetch` — usually no manual management needed.
+Localhost daemon that keeps DNS/TLS/connection pools warm between fetches. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Windows system tray icon with context menu. Port file at `~/.subscope/serve.json`. Auto-started by `subscope fetch` — usually no manual management needed.
 
 ## Background monitoring
 

@@ -34,7 +34,7 @@ src/
   render.ts                 Terminal output, interactive browser, colors
   interactive.ts            TUI config (folder toggle, no source management)
   notify.ts                 Windows toast notifications
-  serve.ts                  Localhost daemon (Ollama-style, SSE streaming, system tray)
+  serve.ts                  Localhost daemon (SSE streaming, system tray)
   browser.ts                Playwright via node subprocess (anti-bot fallback)
   lib.ts                    Shared utils (hash, TLS, fetchPage, fetchWithCffi, fetchWithCurl, retry, item)
   cffi_fetch.py             Python curl_cffi subprocess for TLS impersonation
@@ -149,7 +149,7 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 
 1. `subscope fetch`: ensureServe() auto-starts background daemon → proxy fetch via SSE stream (warm connections, unlimited concurrency). Fallback: direct fetch with 12 concurrent workers. Both paths: resolve adapters → retry up to 3x → store.save (INSERT OR IGNORE) → stream results to terminal with per-source timing.
 2. `subscope` (read): load config → activeSources (filter by mode + group) → store.query (filter by sourceId, since) → render
-3. `subscope serve`: Ollama-style localhost HTTP daemon. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Keeps DNS/TLS/connection pool warm. Windows system tray icon via PowerShell. Port file at `~/.subscope/serve.json`.
+3. `subscope serve`: Localhost HTTP daemon. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Keeps DNS/TLS/connection pool warm. Windows system tray icon via PowerShell. Port file at `~/.subscope/serve.json`.
 
 ## Config location
 
