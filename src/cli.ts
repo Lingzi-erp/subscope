@@ -290,7 +290,22 @@ Write-Output "ok"
     console.log(`\n  ${source.active ? 'Activated' : 'Deactivated'}: ${source.name}\n`)
   },
 
-  config: async () => { await interactiveConfig() },
+  config: async () => {
+    if (args.includes('-j') || args.includes('--json')) {
+      const cfg = load()
+      const tree: Record<string, Record<string, string[]>> = {}
+      for (const s of cfg.sources) {
+        const slash = s.group.indexOf('/')
+        const group = slash === -1 ? s.group : s.group.slice(0, slash)
+        const subgroup = slash === -1 ? s.group : s.group.slice(slash + 1)
+        ;(tree[group] ??= {})[subgroup] ??= []
+        tree[group]![subgroup]!.push(s.name)
+      }
+      console.log(JSON.stringify(tree, null, 2))
+      return
+    }
+    await interactiveConfig()
+  },
 
   auth: async () => {
     const service = args[0]
@@ -438,6 +453,7 @@ if (!command || command.startsWith('-') || isMode) {
     const output = items.map(i => ({
       title: i.title,
       source: formatSourceName(i.sourceName),
+      sourceName: i.sourceName,
       url: i.url,
       summary: i.summary ? clean(i.summary) : undefined,
       publishedAt: i.publishedAt,
