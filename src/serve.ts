@@ -3,6 +3,7 @@
 // Keeps process alive so DNS/TLS/connection pool stays warm.
 
 import { fetchAll, read, type FetchResult, type ReadOpts } from './pipeline.ts'
+import { load } from './config.ts'
 import { DIR } from './lib.ts'
 import { join } from 'path'
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'fs'
@@ -73,6 +74,11 @@ export const startServer = (port = 0) => {
         return Response.json({ status: 'ok', pid: process.pid, uptime: process.uptime() })
       }
 
+      if (url.pathname === '/config') {
+        const config = load()
+        return Response.json(config)
+      }
+
       if (url.pathname === '/fetch') {
         if (fetchInProgress) {
           return Response.json({ error: 'fetch already in progress' }, { status: 409 })
@@ -125,7 +131,8 @@ export const startServer = (port = 0) => {
     },
   })
 
-  const actualPort = server.port
+  const actualPort = server.port ?? port
+  if (actualPort === 0) throw new Error('Server could not bind to a port')
   writePortFile(actualPort)
   startTray(actualPort)
 
@@ -205,7 +212,7 @@ export const proxyFetch = async (port: number, opts?: {
       buffer = lines.pop()!
       for (const line of lines) {
         const match = line.match(/^data: (.+)$/m)
-        if (!match) continue
+        if (!match?.[1]) continue
         const data = JSON.parse(match[1])
         if (data.type === 'result') {
           opts?.onResult?.(data.r, data.done, data.total)
