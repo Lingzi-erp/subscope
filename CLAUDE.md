@@ -149,7 +149,7 @@ Group tweets by `conversation_id_str`. Walk `in_reply_to_status_id_str` chain fo
 
 1. `subscope fetch`: ensureServe() auto-starts background daemon → proxy fetch via SSE stream (warm connections, unlimited concurrency). Fallback: direct fetch with 12 concurrent workers. Both paths: resolve adapters → retry up to 3x → store.save (INSERT OR IGNORE) → stream results to terminal with per-source timing.
 2. `subscope` (read): load config → activeSources (filter by mode + group) → store.query (filter by sourceId, since) → render
-3. `subscope serve`: Localhost HTTP daemon. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Keeps DNS/TLS/connection pool warm. Windows system tray icon via PowerShell. Port file at `~/.subscope/serve.json`.
+3. `subscope serve`: Localhost HTTP daemon. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Keeps DNS/TLS/connection pool warm. Windows system tray icon via PowerShell. Port file at `~/.subscope/serve.json`. Optional second listener: `--api-port <n>` or env `SUBSCOPE_FETCH_PORT` binds `0.0.0.0:<n>` with only `/health` and `/fetch` (same SSE contract as localhost). Optional `SUBSCOPE_FETCH_TOKEN` → require `Authorization: Bearer …` or `?token=`.
 
 ## Config location
 

@@ -83,6 +83,8 @@ subscope watch-install       # Windows scheduled task + desktop notifications
 
 `fetch` auto-starts a localhost daemon that keeps DNS/TLS pools warm. Subsequent fetches stream via SSE with unlimited concurrency. Desktop toast when new items arrive.
 
+Optional **external fetch hook**: `subscope serve --api-port 9847` (or env `SUBSCOPE_FETCH_PORT`) exposes the same `/fetch` SSE on `0.0.0.0` for other machines or services. See [COMMANDS.md](COMMANDS.md) for `SUBSCOPE_FETCH_TOKEN`.
+
 ## Config
 
 ```

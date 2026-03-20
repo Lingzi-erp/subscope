@@ -69,11 +69,14 @@ First fetch auto-starts a background daemon (`subscope serve`) that keeps connec
 ```
 subscope serve                    start localhost HTTP daemon (auto-managed)
 subscope serve <port>             start on specific port
+subscope serve --api-port <n>     also listen on 0.0.0.0:<n> for external /fetch (same SSE as localhost)
 subscope serve status             check if running (port, PID, uptime)
 subscope serve stop               stop daemon and remove tray icon
 ```
 
 Localhost daemon that keeps DNS/TLS/connection pools warm between fetches. Endpoints: `/health`, `/fetch` (SSE stream), `/read` (JSON), `/stop`. Windows system tray icon with context menu. Port file at `~/.subscope/serve.json`. Auto-started by `subscope fetch` — usually no manual management needed.
+
+**External fetch API:** `SUBSCOPE_FETCH_PORT=<n>` (or `subscope serve --api-port <n>`) starts a second HTTP server on all interfaces with only `/health` and `/fetch` — same Server-Sent Events format as the localhost `/fetch` (`type: result` per source, then `type: done`). Set `SUBSCOPE_FETCH_TOKEN` to require `Authorization: Bearer <token>` or `?token=<token>`. Use a host firewall; without a token anyone who can reach the port can trigger a full fetch.
 
 ## Background monitoring
 
